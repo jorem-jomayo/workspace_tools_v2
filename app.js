@@ -232,19 +232,18 @@ function clearNotice(id) {
   notice.className = "notice";
 }
 
-function renderTable(target, title, headers, rows, limit = 10) {
+function renderTable(target, title, headers, rows) {
   const safe = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   })[character]);
-  const visible = rows.slice(0, limit);
   const section = document.createElement("section");
   section.innerHTML = `
     <div class="result-section">
       <h3>${safe(title)}</h3>
-      <p class="result-summary">${rows.length.toLocaleString()} row(s) · showing ${visible.length.toLocaleString()}</p>
+      <p class="result-summary">${rows.length.toLocaleString()} row(s)</p>
       <div class="table-wrap"><table class="result-table">
         <thead><tr>${headers.map((header) => `<th>${safe(header)}</th>`).join("")}</tr></thead>
-        <tbody>${visible.map((row) => `<tr>${headers.map((header) => `<td>${safe(row[header])}</td>`).join("")}</tr>`).join("")}</tbody>
+        <tbody>${rows.map((row) => `<tr>${headers.map((header) => `<td>${safe(row[header])}</td>`).join("")}</tr>`).join("")}</tbody>
       </table></div>
     </div>`;
   target.append(section.firstElementChild);
@@ -317,6 +316,8 @@ function sourceRowsFromSheet(sheet) {
 }
 
 async function processVrp() {
+  const output = document.getElementById("vrp-output");
+  output.replaceChildren();
   const files = Array.from(document.getElementById("vrp-files").files || []);
   const version = document.getElementById("vrp-version").value;
   if (!files.length) throw new Error(version === "MC2" ? "Please select at least one CSV file." : "Please select an Excel workbook.");
@@ -404,8 +405,22 @@ async function processVrp() {
   const releaseName = `Released_to_${bank}_${outputRows.length}.csv`;
   const mainCsv = toCsv(templateHeaders, outputRows);
   const releaseCsv = toCsv(["REF CODE", "RELEASED TO"], releaseRows);
-  const output = document.getElementById("vrp-output");
-  output.replaceChildren();
+  if (version === "MC2") {
+    const cmsHeader = templateHeaders.find((header) => normalizeHeader(header) === "CMSID");
+    if (!cmsHeader) throw new Error(`${TEMPLATE_FILE} is missing the cms_id output column.`);
+    const missingCmsRows = outputRows.filter((row) => {
+      const cmsId = String(row[cmsHeader] ?? "").trim();
+      return !cmsId || ["NAN", "NONE", "NULL"].includes(cmsId.toUpperCase());
+    });
+    if (missingCmsRows.length) {
+      const missingCodes = [...new Set(missingCmsRows
+        .map((row) => findSourceValue(row, ["CH CODE", "CH_CODE", "CHCODE"]))
+        .filter(Boolean))];
+      const codeDetails = missingCodes.length ? ` CH CODE(s): ${missingCodes.join(", ")}.` : "";
+      throw new Error(`MC2 processing stopped: CMS ID not found for ${missingCmsRows.length} account(s). Check the CH CODE mapping in ${CMS_FILE}.${codeDetails}`);
+    }
+  }
+
   renderDownloads(output, [
     { label: `Download Main CSV (${mainName})`, icon: "table", action: () => downloadText(mainCsv, mainName) },
     { label: `Download Released-to CSV (${releaseName})`, icon: "file-text", action: () => downloadText(releaseCsv, releaseName) }
