@@ -809,7 +809,7 @@ document.getElementById("esign-form").addEventListener("submit", (event) => {
 });
 document.getElementById("vrp-reset").addEventListener("click", () => {
   window.setTimeout(() => {
-    updateVrpUploadMode(false);
+    updateVrpUploadMode();
     clearNotice("vrp-notice");
     document.getElementById("vrp-output").replaceChildren();
   }, 0);
