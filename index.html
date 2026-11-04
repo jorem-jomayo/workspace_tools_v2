@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1F06AC">
+  <link rel="icon" type="image/svg+xml" href="assets/workspace-tools-icon.svg?v=2">
+  <title>Workspace Tools V2</title>
+  <style>
+    @font-face {
+      font-family: "Inter";
+      src: url("assets/fonts/inter-latin-400-normal.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "Inter";
+      src: url("assets/fonts/inter-latin-500-normal.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "Inter";
+      src: url("assets/fonts/inter-latin-600-normal.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "Inter";
+      src: url("assets/fonts/inter-latin-700-normal.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 700 900;
+      font-display: swap;
+    }
+
+    :root {
+      color-scheme: light;
+      --ink: #182044;
+      --muted: #6f7898;
+      --line: #e4e9f8;
+      --paper: #fff;
+      --canvas: #eef2ff;
+      --glass: rgb(255 255 255 / 62%);
+      --glass-strong: rgb(255 255 255 / 78%);
+      --glass-border: rgb(255 255 255 / 78%);
+      --brand-deep: #1F06AC;
+      --brand: #0F42C0;
+      --brand-light: #5882E8;
+      --lime: #E3EF4F;
+      --status-bg: #edf2ff;
+      --shadow: 0 20px 55px rgb(31 6 172 / 10%);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Helvetica Neue", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at 88% 12%, rgb(88 130 232 / 30%), transparent 35rem),
+        radial-gradient(ellipse at 34% 88%, rgb(227 239 79 / 23%), transparent 30rem),
+        linear-gradient(135deg, #f8f9ff 0%, var(--canvas) 48%, #f5f7ff 100%);
+      background-attachment: fixed;
+    }
+
+    body::before {
+      position: fixed;
+      z-index: 0;
+      inset: -10%;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at 88% 34%, rgb(88 130 232 / 18%), transparent 24rem),
+        radial-gradient(ellipse at 43% 82%, rgb(227 239 79 / 15%), transparent 21rem);
+      content: "";
+      filter: blur(35px);
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .app-shell { position: relative; z-index: 1; min-height: 100vh; }
+
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 2;
+      display: flex;
+      width: 252px;
+      flex-direction: column;
+      padding: 26px 18px 20px;
+      border-right: 1px solid rgb(255 255 255 / 12%);
+      color: #fff;
+      background:
+        linear-gradient(155deg, rgb(31 6 172 / 91%), rgb(15 66 192 / 83%)),
+        var(--brand-deep);
+      box-shadow: 10px 0 40px rgb(31 6 172 / 17%);
+      -webkit-backdrop-filter: blur(28px) saturate(155%);
+      backdrop-filter: blur(28px) saturate(155%);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 9px 28px;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border: 1px solid rgb(227 239 79 / 40%);
+      border-radius: 14px;
+      color: var(--brand-deep);
+      background: var(--lime);
+      font-size: 22px;
+      box-shadow: 0 8px 20px rgb(0 0 0 / 14%);
+    }
+
+    .icon {
+      display: block;
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.8;
+    }
+
+    .brand-mark .icon { width: 22px; height: 22px; }
+    .brand-name { font-size: 15px; font-weight: 750; letter-spacing: -.02em; }
+    .brand-caption { margin-top: 3px; color: rgb(255 255 255 / 65%); font-size: 11px; }
+    .nav-label { padding: 0 10px 10px; color: rgb(255 255 255 / 54%); font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+    .tool-nav { display: grid; gap: 5px; }
+
+    .nav-button {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 12px;
+      border: 0;
+      border-radius: 10px;
+      color: rgb(255 255 255 / 76%);
+      background: transparent;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      transition: background .18s ease, color .18s ease, transform .18s ease;
+    }
+
+    .nav-button:hover { color: #fff; background: rgb(255 255 255 / 11%); transform: translateX(2px); }
+    .nav-button[aria-current="page"] { border: 1px solid rgb(255 255 255 / 54%); color: var(--brand-deep); background: rgb(227 239 79 / 88%); box-shadow: 0 7px 18px rgb(0 0 0 / 14%), inset 0 1px 0 rgb(255 255 255 / 60%); -webkit-backdrop-filter: blur(18px) saturate(165%); backdrop-filter: blur(18px) saturate(165%); }
+    .nav-icon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; background: rgb(255 255 255 / 9%); text-align: center; }
+    .nav-icon .icon { width: 16px; height: 16px; }
+    .nav-button[aria-current="page"] .nav-icon { background: rgb(31 6 172 / 9%); }
+
+    .side-footer { margin-top: auto; padding: 16px 9px 0; color: rgb(255 255 255 / 58%); font-size: 10px; line-height: 1.8; }
+
+    .main { min-height: 100vh; margin-left: 252px; }
+
+    .topbar {
+      display: flex;
+      min-height: 70px;
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 42px;
+      border-bottom: 1px solid var(--line);
+      background: rgb(255 255 255 / 64%);
+      box-shadow: 0 8px 26px rgb(31 6 172 / 4%);
+      box-shadow: 0 8px 26px rgb(31 6 172 / 4%);
+      -webkit-backdrop-filter: blur(22px) saturate(160%);
+      backdrop-filter: blur(22px) saturate(160%);
+    }
+
+    .breadcrumb { color: var(--muted); font-size: 12px; }
+    .breadcrumb strong { color: var(--ink); font-weight: 650; }
+
+    .content { width: min(100%, 1120px); margin: 0 auto; padding: 42px 46px 64px; transition: opacity .16s ease; }
+    .content.is-transitioning { opacity: 0; }
+    .page-heading { margin-bottom: 27px; }
+    .eyebrow { margin-bottom: 9px; color: var(--brand); font-size: 10px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(24px, 3vw, 31px); letter-spacing: -.04em; }
+    .subtitle { max-width: 640px; margin: 9px 0 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
+
+    .panel {
+      padding: 24px;
+      border: 1px solid var(--glass-border);
+      border-radius: 22px;
+      background: linear-gradient(145deg, rgb(255 255 255 / 66%), rgb(255 255 255 / 43%));
+      box-shadow: var(--shadow), inset 0 1px 0 rgb(255 255 255 / 95%);
+      -webkit-backdrop-filter: blur(28px) saturate(170%);
+      backdrop-filter: blur(28px) saturate(170%);
+      transition: box-shadow .22s ease, transform .22s ease, border-color .22s ease;
+    }
+
+    .panel:hover { border-color: #fff; box-shadow: 0 25px 65px rgb(31 6 172 / 13%), inset 0 1px 0 #fff; }
+    .panel-heading { display: flex; align-items: flex-start; gap: 13px; margin-bottom: 21px; }
+    .panel-icon {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid #e5ebff;
+      border-radius: 13px;
+      color: var(--brand);
+      background: linear-gradient(145deg, #edf2ff, #e1eaff);
+    }
+
+    .panel-icon .icon { width: 21px; height: 21px; }
+    .panel-heading h2 { margin: 1px 0 5px; font-size: 16px; letter-spacing: -.02em; }
+    .panel-heading p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .field { min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    .field-label { display: block; margin-bottom: 7px; color: #44534a; font-size: 11px; font-weight: 700; }
+    .optional { color: #929e96; font-size: 10px; font-weight: 500; }
+
+    select, textarea {
+      width: 100%;
+      border: 1px solid rgb(211 220 246 / 82%);
+      border-radius: 11px;
+      outline: none;
+      color: var(--ink);
+      background: rgb(255 255 255 / 58%);
+      box-shadow: inset 0 1px 2px rgb(31 6 172 / 3%), 0 1px 0 rgb(255 255 255 / 80%);
+      transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+
+    select { height: 40px; padding: 0 12px; font-size: 12px; }
+    textarea { min-height: 103px; resize: vertical; padding: 11px 12px; font-size: 12px; line-height: 1.5; }
+    textarea::placeholder { color: #a1aaa4; }
+    select:focus, textarea:focus { border-color: var(--brand-light); box-shadow: 0 0 0 3px rgb(88 130 232 / 15%); }
+
+    .drop-zone {
+      position: relative;
+      display: flex;
+      min-height: 126px;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      border: 1px dashed #aebfe9;
+      border-radius: 15px;
+      background: linear-gradient(145deg, rgb(255 255 255 / 57%), rgb(237 242 255 / 35%));
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 88%);
+      text-align: center;
+      transition: border-color .16s ease, background .16s ease;
+    }
+
+    .drop-zone:hover { border-color: var(--brand-light); background: linear-gradient(145deg, #fff, rgb(237 242 255 / 90%)); }
+    .drop-zone input { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; opacity: 0; }
+    .upload-icon { display: grid; width: 34px; height: 34px; margin: 0 auto 7px; place-items: center; border: 1px solid #e1e8fb; border-radius: 11px; color: var(--brand); background: rgb(255 255 255 / 70%); box-shadow: 0 4px 12px rgb(31 6 172 / 6%); }
+    .upload-icon .icon { width: 19px; height: 19px; }
+    .upload-title { color: #3d4d43; font-size: 11px; font-weight: 700; }
+    .upload-help { margin-top: 5px; color: #909c93; font-size: 10px; }
+    .file-list { margin-top: 9px; color: var(--brand); font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+    .field-hint { margin-top: 7px; color: #89968d; font-size: 10px; line-height: 1.5; }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 21px; }
+    .button {
+      display: inline-flex;
+      min-height: 39px;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 15px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      transition: transform .15s ease, background .15s ease;
+    }
+
+    .button .icon { width: 15px; height: 15px; }
+    .button:hover { transform: translateY(-1px); }
+    .button-primary { border-color: rgb(255 255 255 / 55%); color: #fff; background: linear-gradient(110deg, var(--brand), var(--brand-light)); box-shadow: 0 8px 20px rgb(15 66 192 / 22%), inset 0 1px 0 rgb(255 255 255 / 35%); }
+    .button-primary:hover { background: linear-gradient(110deg, var(--brand-deep), var(--brand)); box-shadow: 0 11px 26px rgb(15 66 192 / 29%), inset 0 1px 0 rgb(255 255 255 / 35%); }
+    .button-primary:disabled { cursor: wait; opacity: .7; transform: none; }
+    .button-secondary { border-color: rgb(211 220 246 / 90%); color: #4c587e; background: rgb(255 255 255 / 68%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 90%); }
+    .button-secondary:hover { border-color: #c4d2fa; color: var(--brand); background: rgb(255 255 255 / 90%); }
+
+    .output-hint {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .output-card { padding: 12px; border: 1px solid rgb(255 255 255 / 90%); border-radius: 13px; background: rgb(255 255 255 / 58%); box-shadow: 0 5px 16px rgb(31 6 172 / 4%), inset 0 1px 0 #fff; }
+    .output-card span { display: block; margin-bottom: 4px; color: #8b978f; font-size: 9px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+    .output-card strong { color: #46564b; font-size: 11px; font-weight: 650; }
+    .notice { margin-top: 15px; padding: 11px 12px; border: 1px solid rgb(255 255 255 / 86%); border-radius: 11px; color: #43527c; background: rgb(255 255 255 / 61%); font-size: 11px; line-height: 1.5; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+    .notice.success { border-color: #d8e899; color: #353d04; background: #f8fbdc; }
+    .notice.error { border-color: #efcaca; color: #922f2f; background: #fff5f5; }
+    .result-section { margin-top: 20px; }
+    .result-section h3 { margin: 0 0 10px; font-size: 13px; }
+    .result-summary { margin: 0 0 12px; color: var(--muted); font-size: 11px; }
+    .table-wrap { max-height: 340px; overflow: auto; border: 1px solid rgb(255 255 255 / 88%); border-radius: 13px; background: rgb(255 255 255 / 68%); box-shadow: 0 7px 20px rgb(31 6 172 / 5%); }
+    .result-table { width: 100%; border-collapse: collapse; font-size: 10px; white-space: nowrap; }
+    .result-table th, .result-table td { padding: 7px 9px; border-bottom: 1px solid var(--line); text-align: left; }
+    .result-table th { position: sticky; top: 0; color: var(--brand-deep); background: rgb(237 242 255 / 94%); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+    .result-table tr:last-child td { border-bottom: 0; }
+    .preview-image { display: block; max-width: 100%; max-height: 280px; margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; }
+    .tool-view[hidden] { display: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+    }
+
+    @media (max-width: 820px) {
+      .sidebar { width: 210px; padding-right: 13px; padding-left: 13px; }
+      .main { margin-left: 210px; }
+      .topbar { padding-right: 25px; padding-left: 25px; }
+      .content { padding-right: 25px; padding-left: 25px; }
+    }
+
+    @media (max-width: 620px) {
+      .sidebar { position: static; width: auto; padding: 14px 16px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .brand { padding: 0 3px 13px; }
+      .nav-label { display: none; }
+      .side-footer { margin-top: 12px; padding: 10px 3px 0; border-top: 1px solid rgb(255 255 255 / 14%); }
+      .tool-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+      .nav-button { min-height: 45px; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 3px; font-size: 9px; }
+      .nav-icon { width: 24px; height: 24px; }
+      .nav-icon .icon { width: 14px; height: 14px; }
+      .main { margin-left: 0; }
+      .topbar { min-height: 54px; padding: 10px 17px; }
+      .breadcrumb { font-size: 10px; }
+      .content { padding: 25px 16px 40px; }
+      .panel { padding: 18px; }
+      .form-grid { grid-template-columns: 1fr; gap: 15px; }
+      .field.full { grid-column: auto; }
+      .output-hint { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden">
+    <symbol id="icon-toolbox" viewBox="0 0 24 24"><path d="M4 8.5h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"/><path d="M8 8.5v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M2 13h20M10 13v2h4v-2"/></symbol>
+    <symbol id="icon-rocket" viewBox="0 0 24 24"><path d="M5 15.5c-1.6 1.2-2.2 3.2-2.2 5.2 2-.1 4-.7 5.2-2.2"/><path d="M9 15 6 12C8 7.2 12.7 3.5 20 3c-.5 7.3-4.2 12.2-9 14l-2-2Z"/><circle cx="14.5" cy="9.5" r="2"/><path d="m6 12-3 .5L2 16l5-1M12 18l-.5 3.5L8 23l1-5"/></symbol>
+    <symbol id="icon-chart" viewBox="0 0 24 24"><path d="M4 19V5M4 19h17"/><path d="M8 16v-4h3v4M14 16V8h3v8M19 16v-6h2v6"/></symbol>
+    <symbol id="icon-pen" viewBox="0 0 24 24"><path d="m4 16.5-.8 4.3 4.3-.8L20 7.5 16.5 4 4 16.5Z"/><path d="m14.8 5.7 3.5 3.5M4 16.5l3.5 3.5"/></symbol>
+    <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M3 6.5a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-12Z"/><path d="M3 9h18"/></symbol>
+    <symbol id="icon-sparkles" viewBox="0 0 24 24"><path d="m12 3 1.4 5.6L19 10l-5.6 1.4L12 17l-1.4-5.6L5 10l5.6-1.4L12 3Z"/><path d="m19 14 .8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14ZM5 3l.6 1.4L7 5l-1.4.6L5 7l-.6-1.4L3 5l1.4-.6L5 3Z"/></symbol>
+    <symbol id="icon-rotate" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.5-3"/></symbol>
+    <symbol id="icon-sheet" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8 12h8M8 16h8M8 9h2"/></symbol>
+    <symbol id="icon-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 20"/></symbol>
+    <symbol id="icon-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8.2 8.2 12.3 12.3M8.2 15.8 20.5 3.5"/></symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v3h14v-3"/></symbol>
+    <symbol id="icon-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16M15 10v10"/></symbol>
+    <symbol id="icon-archive" viewBox="0 0 24 24"><path d="M4 4h16v4H4zM5 8v12h14V8M10 12h4"/></symbol>
+    <symbol id="icon-file-text" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8 13h8M8 17h8"/></symbol>
+  </svg>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><svg class="icon"><use href="#icon-toolbox"></use></svg></div>
+        <div>
+          <div class="brand-name">Workspace Tools V2</div>
+          <div class="brand-caption">File processing workspace</div>
+        </div>
+      </div>
+
+      <div class="nav-label">Tools</div>
+      <nav class="tool-nav" aria-label="Workspace tools">
+        <button class="nav-button" type="button" data-tool="vrp" aria-current="page">
+          <span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#icon-rocket"></use></svg></span><span>VRP Mapper</span>
+        </button>
+        <button class="nav-button" type="button" data-tool="field" aria-current="false">
+          <span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#icon-chart"></use></svg></span><span>Field Result</span>
+        </button>
+        <button class="nav-button" type="button" data-tool="esign" aria-current="false">
+          <span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#icon-pen"></use></svg></span><span>E-SIGN FIXER</span>
+        </button>
+      </nav>
+
+      <div class="side-footer">Workspace Tools V2 · Browser edition<br>Built with 💙 by Jomayo</div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumb">Workspace <span aria-hidden="true">/</span> <strong id="current-tool">VRP Mapper</strong></div>
+      </header>
+
+      <div class="content">
+        <div class="page-heading">
+          <div class="eyebrow">Workspace Tools V2</div>
+          <h1 id="page-title">VRP Mapper</h1>
+          <p class="subtitle" id="page-subtitle">Map VRP account files to the demand letter template and prepare release data.</p>
+        </div>
+
+        <section class="tool-view is-active" id="tool-vrp">
+          <div class="panel">
+            <div class="panel-heading">
+              <div class="panel-icon" aria-hidden="true"><svg class="icon"><use href="#icon-rocket"></use></svg></div>
+              <div>
+                <h2>VRP Account Template Mapper</h2>
+                <p>Choose a version, add source files, and optionally filter by reference code.</p>
+              </div>
+            </div>
+
+            <form id="vrp-form">
+              <div class="form-grid">
+                <div class="field">
+                  <label class="field-label" for="vrp-version">Version</label>
+                  <select id="vrp-version" name="version">
+                    <option value="MC2">MC2</option>
+                    <option value="FCL">FCL</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="field-label" id="vrp-upload-label" for="vrp-files">Upload VRP ACCOUNTS CSV(s)</label>
+                  <div class="drop-zone">
+                    <input id="vrp-files" type="file" accept=".csv,text/csv" multiple>
+                    <div>
+                      <div class="upload-icon" aria-hidden="true"><svg class="icon"><use href="#icon-folder"></use></svg></div>
+                      <div class="upload-title">Choose file(s) from your device</div>
+                      <div class="upload-help" id="vrp-upload-help">CSV files · multiple files allowed</div>
+                      <div class="file-list" id="vrp-file-list" aria-live="polite"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="field full">
+                  <label class="field-label" for="reference-codes">Paste Reference Codes <span class="optional">(optional filter · one per line)</span></label>
+                  <textarea id="reference-codes" name="reference-codes" placeholder="Paste reference codes here, one per line"></textarea>
+                  <div class="field-hint">Only rows matching the pasted reference codes are included in the processed output.</div>
+                </div>
+              </div>
+              <div class="actions">
+                <button class="button button-primary" type="submit"><svg class="icon"><use href="#icon-sparkles"></use></svg>Process and Map Data</button>
+                <button class="button button-secondary" id="vrp-reset" type="reset"><svg class="icon"><use href="#icon-rotate"></use></svg>Reset / Clear All</button>
+              </div>
+              <div class="notice" id="vrp-notice" hidden role="status"></div>
+            </form>
+            <div id="vrp-output"></div>
+          </div>
+        </section>
+
+        <section class="tool-view" id="tool-field" hidden>
+          <div class="panel">
+            <div class="panel-heading">
+              <div class="panel-icon" aria-hidden="true"><svg class="icon"><use href="#icon-chart"></use></svg></div>
+              <div>
+                <h2>Field Result Column Extractor</h2>
+                <p>Upload an Excel workbook containing a sheet named <strong>RESULT</strong>.</p>
+              </div>
+            </div>
+            <form id="field-form">
+              <div class="field">
+                <label class="field-label" for="field-file">Upload Workbook (.xlsx)</label>
+                <div class="drop-zone">
+                  <input id="field-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                  <div>
+                    <div class="upload-icon" aria-hidden="true"><svg class="icon"><use href="#icon-sheet"></use></svg></div>
+                    <div class="upload-title">Choose an Excel workbook</div>
+                    <div class="upload-help">.xlsx file · must contain a RESULT sheet</div>
+                    <div class="file-list" id="field-file-list" aria-live="polite"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="actions">
+                <button class="button button-primary" type="submit"><svg class="icon"><use href="#icon-rotate"></use></svg>Process Field Result</button>
+              </div>
+              <div class="notice" id="field-notice" hidden role="status"></div>
+            </form>
+            <div id="field-output"></div>
+          </div>
+        </section>
+
+        <section class="tool-view" id="tool-esign" hidden>
+          <div class="panel">
+            <div class="panel-heading">
+              <div class="panel-icon" aria-hidden="true"><svg class="icon"><use href="#icon-pen"></use></svg></div>
+              <div>
+                <h2>E-SIGN FIXER</h2>
+                <p>Upload an image page with multiple signatures to prepare isolated transparent signature images.</p>
+              </div>
+            </div>
+            <form id="esign-form">
+              <div class="field">
+                <label class="field-label" for="esign-file">Upload Image</label>
+                <div class="drop-zone">
+                  <input id="esign-file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
+                  <div>
+                    <div class="upload-icon" aria-hidden="true"><svg class="icon"><use href="#icon-image"></use></svg></div>
+                    <div class="upload-title">Choose an image page</div>
+                    <div class="upload-help">PNG or JPG · processed on this device</div>
+                    <div class="file-list" id="esign-file-list" aria-live="polite"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="actions">
+                <button class="button button-primary" type="submit"><svg class="icon"><use href="#icon-scissors"></use></svg>Extract Signatures</button>
+              </div>
+              <div class="notice" id="esign-notice" hidden role="status"></div>
+            </form>
+            <div id="esign-output"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="vendor/jszip.min.js"></script>
+  <script src="app.js?v=2"></script>
+</body>
+</html>
