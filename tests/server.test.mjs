@@ -48,7 +48,7 @@ function json(body) {
   });
 }
 
-function makeXlsxWorkbook() {
+function makeXlsxWorkbook(banks = ["BANK A"]) {
   const context = vm.createContext({});
   vm.runInContext(
     readFileSync(path.join(ROOT, "vendor", "xlsx.full.min.js"), "utf8"),
@@ -61,10 +61,15 @@ function makeXlsxWorkbook() {
     context.XLSX.utils.aoa_to_sheet([["Other sheet"]]),
     "Summary"
   );
-  const sourceRow = Array(42).fill("");
-  sourceRow[41] = "REF-100";
-  sourceRow[26] = "Field User";
-  const resultRows = [Array(42).fill("Header"), sourceRow];
+  const sourceRows = banks.map((bank, index) => {
+    const row = Array(42).fill("");
+    row[5] = "CAMPAIGN F";
+    row[32] = bank;
+    row[41] = `REF-${100 + index}`;
+    row[26] = index === 0 ? "Field User" : `Field ${index + 1}`;
+    return row;
+  });
+  const resultRows = [Array(42).fill("Header"), ...sourceRows];
   context.XLSX.utils.book_append_sheet(
     workbook,
     context.XLSX.utils.aoa_to_sheet(resultRows),
@@ -104,13 +109,28 @@ test("serves the app without an app-level sign-in when tunnel mode is private", 
   await withServer(async (baseUrl) => {
     const response = await fetch(baseUrl);
     assert.equal(response.status, 200);
-    assert.match(await response.text(), /Workspace Tools V2/);
+    const appHtml = await response.text();
+    assert.match(appHtml, /Workspace Tools V2/);
+    assert.match(appHtml, /app\.js\?v=41/);
+    assert.match(appHtml, /id="field-bank-summary" aria-live="polite">Please select in settings\./);
+    assert.match(appHtml, /<button class="button button-primary" type="submit" disabled><svg class="icon"><use href="#icon-rotate"><\/use><\/svg>Process Field Result<\/button>/);
+    assert.match(appHtml, /data-field-campaign="pif" aria-pressed="false">PIF/);
+    assert.match(appHtml, /data-field-campaign="all" aria-pressed="false">ALL CAMPAIGN/);
+    assert.match(appHtml, /id="field-bank-apply" type="button" disabled>Apply/);
 
     const appScript = await fetch(`${baseUrl}/app.js?v=19`);
     assert.equal(appScript.status, 200);
     assert.equal(appScript.headers.get("Cache-Control"), "no-store");
     assert.match(appScript.headers.get("Content-Type"), /^text\/javascript/);
-    assert.match(await appScript.text(), /new Worker\("field-result-worker\.js\?v=4"\)/);
+    const appScriptText = await appScript.text();
+    assert.match(appScriptText, /new Worker\("field-result-worker\.js\?v=11"\)/);
+    assert.match(appScriptText, /Please select PIF or ALL CAMPAIGN in Field Result settings/);
+    assert.match(appScriptText, /searchParams\.set\("campaign", fieldFilters\.campaign\)/);
+    assert.match(appScriptText, /pendingFieldFilters\.campaign = button\.dataset\.fieldCampaign;\s+pendingFieldFilters\.bank = "";\s+syncFieldFilterControls\(pendingFieldFilters\);/);
+    assert.match(appScriptText, /field-bank-apply"\)\.disabled = !filters\.campaign/);
+    assert.match(appScriptText, /data:image\/svg\+xml/);
+    assert.match(appScriptText, /stop-color="#E31837"/);
+    assert.match(appScriptText, /<rect x="14" y="24" width="36" height="25" rx="6" fill="#FFF0F0"\/>/);
 
     const xlsxLibrary = await fetch(`${baseUrl}/vendor/xlsx.full.min.js`);
     assert.equal(xlsxLibrary.status, 200);
@@ -122,6 +142,7 @@ test("serves the app without an app-level sign-in when tunnel mode is private", 
     assert.match(fieldWorker.headers.get("Content-Type"), /^text\/javascript/);
     assert.equal(fieldWorker.headers.get("Cache-Control"), "no-store");
     assert.match(await fieldWorker.text(), /PREVIEW_ROW_LIMIT = 100/);
+
   });
 });
 
@@ -183,7 +204,8 @@ test("streams Field Result processing on the server and serves its output files"
       method: "POST",
       headers: {
         "Content-Length": String(workbook.length),
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "X-Field-Result-Banks": encodeURIComponent(JSON.stringify({ campaign: "all", bank: "" }))
       },
       body: workbook
     });
@@ -191,6 +213,7 @@ test("streams Field Result processing on the server and serves its output files"
       throw new Error(`Field Result API returned ${response.status}: ${await response.text()}`);
     }
     const result = await response.json();
+    assert.equal(result.campaign, "all");
     assert.equal(result.rows, 2);
     assert.equal(result.previewRows[1][0], "REF-100");
     assert.equal(result.previewRows[1][7], "Field User");
@@ -219,6 +242,179 @@ test("streams Field Result processing on the server and serves its output files"
     );
     assert.equal(outputRows[1][0], "REF-100");
     assert.equal(outputRows[1][7], "Field User");
+  });
+});
+
+test("lists banks from column AG and filters Field Result server output", async () => {
+  const workbook = makeXlsxWorkbook(["BANK A", "BANK B", "BANK A"]);
+  await withServer(async (baseUrl) => {
+    const bankResponse = await fetch(`${baseUrl}/api/field-result/banks`, {
+      method: "POST",
+      headers: {
+        "Content-Length": String(workbook.length),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      },
+      body: workbook
+    });
+    assert.equal(bankResponse.status, 200);
+    assert.deepEqual((await bankResponse.json()).banks, ["BANK A", "BANK B"]);
+
+    const processResponse = await fetch(`${baseUrl}/api/field-result`, {
+      method: "POST",
+      headers: {
+        "Content-Length": String(workbook.length),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "X-Field-Result-Banks": JSON.stringify(["BANK B"])
+      },
+      body: workbook
+    });
+    assert.equal(processResponse.status, 200);
+    const result = await processResponse.json();
+    assert.equal(result.rows, 2);
+    assert.equal(result.previewRows[1][0], "REF-101");
+
+    const csvResponse = await fetch(`${baseUrl}/api/field-result/${result.id}/csv`);
+    const csv = await csvResponse.text();
+    assert.match(csv, /REF-101,Field 2/);
+    assert.doesNotMatch(csv, /REF-100|REF-102/);
+  });
+});
+
+test("processes multiple selected banks on the server", async () => {
+  const workbook = makeXlsxWorkbook(["BANK A", "BANK B", "BANK C"]);
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/field-result`, {
+      method: "POST",
+      headers: {
+        "Content-Length": String(workbook.length),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "X-Field-Result-Banks": JSON.stringify(["BANK A", "BANK C"])
+      },
+      body: workbook
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.rows, 3);
+    const csvResponse = await fetch(`${baseUrl}/api/field-result/${result.id}/csv`);
+    const csv = await csvResponse.text();
+    assert.match(csv, /REF-100,Field User/);
+    assert.match(csv, /REF-102,Field 3/);
+    assert.doesNotMatch(csv, /REF-101/);
+  });
+});
+
+test("filters PIF campaign and an exact selected bank on the server", async () => {
+  const workbook = makeXlsxWorkbook(["PIF HOME LOAN", "PIF CARD", "OTHER BANK"]);
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/field-result`, {
+      method: "POST",
+      headers: {
+        "Content-Length": String(workbook.length),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "X-Field-Result-Banks": encodeURIComponent(JSON.stringify({ campaign: "pif", bank: "PIF CARD" }))
+      },
+      body: workbook
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.rows, 2);
+    assert.equal(result.previewRows[1][0], "REF-101");
+    const csvResponse = await fetch(`${baseUrl}/api/field-result/${result.id}/csv`);
+    const csv = await csvResponse.text();
+    assert.match(csv, /REF-101,Field 2/);
+    assert.doesNotMatch(csv, /REF-100|REF-102/);
+  });
+});
+
+test("PIF campaign selection excludes every non-PIF bank on the server", async () => {
+  const workbook = makeXlsxWorkbook(["PIF HOME LOAN", "PIF CARD", "OTHER BANK"]);
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/field-result`, {
+      method: "POST",
+      headers: {
+        "Content-Length": String(workbook.length),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "X-Field-Result-Banks": encodeURIComponent(JSON.stringify({ campaign: "pif", bank: "" }))
+      },
+      body: workbook
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.campaign, "pif");
+    assert.equal(result.rows, 3);
+    assert.deepEqual(result.previewRows.slice(1).map((row) => row[0]), ["REF-100", "REF-101"]);
+    const csvResponse = await fetch(`${baseUrl}/api/field-result/${result.id}/csv`);
+    const csv = await csvResponse.text();
+    assert.match(csv, /REF-100,Field User/);
+    assert.match(csv, /REF-101,Field 2/);
+    assert.doesNotMatch(csv, /REF-102/);
+  });
+});
+
+test("ALL CAMPAIGN processes every bank in source column AG", async () => {
+  const workbook = makeXlsxWorkbook(["PIF HOME LOAN", "OTHER BANK", "SBC CARDS"]);
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/field-result`, {
+      method: "POST",
+      headers: {
+        "Content-Length": String(workbook.length),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "X-Field-Result-Banks": encodeURIComponent(JSON.stringify({ campaign: "all", bank: "" }))
+      },
+      body: workbook
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.campaign, "all");
+    assert.equal(result.rows, 4);
+    assert.deepEqual(result.previewRows.slice(1).map((row) => row[0]), [
+      "REF-100",
+      "REF-101",
+      "REF-102"
+    ]);
+  });
+});
+
+test("campaign query parameter overrides a stale campaign header", async () => {
+  const workbook = makeXlsxWorkbook(["PIF HOME LOAN", "OTHER BANK"]);
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/field-result?campaign=all&bank=`, {
+      method: "POST",
+      headers: {
+        "Content-Length": String(workbook.length),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "X-Field-Result-Banks": encodeURIComponent(JSON.stringify({ campaign: "pif", bank: "" }))
+      },
+      body: workbook
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.campaign, "all");
+    assert.equal(result.rows, 3);
+    assert.deepEqual(result.previewRows.slice(1).map((row) => row[0]), ["REF-100", "REF-101"]);
+  });
+});
+
+test("defaults server processing to PIF when a client omits campaign filters", async () => {
+  const workbook = makeXlsxWorkbook(["PIF HOME LOAN", "OTHER BANK"]);
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/field-result`, {
+      method: "POST",
+      headers: {
+        "Content-Length": String(workbook.length),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      },
+      body: workbook
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.campaign, "pif");
+    assert.equal(result.rows, 2);
+    assert.deepEqual(result.previewRows.slice(1).map((row) => row[0]), ["REF-100"]);
+    const csvResponse = await fetch(`${baseUrl}/api/field-result/${result.id}/csv`);
+    const csv = await csvResponse.text();
+    assert.match(csv, /REF-100,Field User/);
+    assert.doesNotMatch(csv, /REF-101/);
   });
 });
 
