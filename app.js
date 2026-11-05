@@ -430,75 +430,187 @@ async function processVrp() {
   return `${outputRows.length.toLocaleString()} account(s) processed.`;
 }
 
-function formatExcelDate(value) {
-  if (value == null || value === "") return value;
-  if (typeof value === "number") {
-    const date = XLSX.SSF.parse_date_code(value);
-    if (date) return new Date(Date.UTC(date.y, date.m - 1, date.d));
-  }
-  const text = String(value).trim();
-  if (!/^\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}(?:\.\d+)?)?$/.test(text)
-    && !/^\d{1,2}\/\d{1,2}\/\d{4}(?: \d{2}:\d{2}:\d{2}(?:\.\d+)?)?$/.test(text)) return value;
-  const parsed = new Date(text);
-  return Number.isFinite(parsed.getTime()) ? parsed : value;
+function referenceCodesFromColumnM(rows) {
+  return [...new Set(rows.slice(1)
+    .map((row) => String(row[12] ?? "").trim())
+    .filter(Boolean))];
 }
 
-function dateToUsString(value) {
-  if (!(value instanceof Date)) return value == null ? "" : value;
-  return `${String(value.getUTCMonth() + 1).padStart(2, "0")}/${String(value.getUTCDate()).padStart(2, "0")}/${value.getUTCFullYear()}`;
+async function extractVrpReferenceCodes() {
+  const files = Array.from(vrpFiles.files || []);
+  if (!files.length) throw new Error("Please select a source file first.");
+
+  const rows = [];
+  if (versionSelect.value === "MC2") {
+    for (const file of files) {
+      if (!file.name.toLowerCase().endsWith(".csv")) {
+        throw new Error(`${file.name}: MC2 accepts CSV files only.`);
+      }
+      rows.push(...referenceCodesFromColumnM(parseCsv(await file.text())));
+    }
+  } else {
+    const file = files[0];
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      throw new Error("FCL accepts an .xlsx workbook.");
+    }
+    const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", raw: false });
+    const sheetName = workbook.SheetNames.find((name) => name.trim().toUpperCase() === "SUMMARY");
+    if (!sheetName) throw new Error("The Excel workbook does not contain a sheet named SUMMARY.");
+    const sheetRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      header: 1,
+      defval: "",
+      raw: false
+    });
+    rows.push(...referenceCodesFromColumnM(sheetRows));
+  }
+
+  const codes = [...new Set(rows)];
+  if (!codes.length) throw new Error("No REF CODE values were found in column M.");
+  return codes;
+}
+
+async function copyToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Try the legacy copy method for browsers that reject Clipboard API access.
+    }
+  }
+
+  const temporaryInput = document.createElement("textarea");
+  temporaryInput.value = text;
+  temporaryInput.setAttribute("readonly", "");
+  temporaryInput.style.position = "fixed";
+  temporaryInput.style.left = "-9999px";
+  const previousFocus = document.activeElement;
+  document.body.append(temporaryInput);
+  let copied = false;
+  try {
+    temporaryInput.focus();
+    temporaryInput.select();
+    copied = document.execCommand("copy");
+  } finally {
+    temporaryInput.remove();
+    previousFocus?.focus();
+  }
+  if (!copied) throw new Error("Clipboard access was blocked. Allow clipboard access and try again.");
 }
 
 async function processFieldResult() {
   const file = document.getElementById("field-file").files[0];
   if (!file) throw new Error("Please select an Excel workbook.");
   if (!file.name.toLowerCase().endsWith(".xlsx")) throw new Error("Please select an .xlsx workbook.");
-  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
-  const sheetName = workbook.SheetNames.find((name) => name.trim().toUpperCase() === "RESULT");
-  if (!sheetName) throw new Error("A sheet named RESULT was not found in this workbook.");
-  const sheet = workbook.Sheets[sheetName];
-  const source = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true });
-  const sourceRow = (row, column) => row[column] ?? "";
-  const targetRows = source.map((row) => [
-    sourceRow(row, 41), sourceRow(row, 2), sourceRow(row, 3), sourceRow(row, 4),
-    sourceRow(row, 27), sourceRow(row, 32), sourceRow(row, 36), sourceRow(row, 26)
-  ].map(formatExcelDate));
-  const extraRows = source.slice(1).map((row) => ({
-    "Ref Code": sourceRow(row, 41),
-    "Field Name": sourceRow(row, 26)
-  }));
-  const outputBook = XLSX.utils.book_new();
-  const outputSheet = XLSX.utils.aoa_to_sheet(targetRows.map((row) => row.map(dateToUsString)));
-  outputSheet["!cols"] = Array.from({ length: 8 }, (_, col) => {
-    const width = targetRows.reduce((max, row) => Math.max(max, String(dateToUsString(row[col]) ?? "").length), 0);
-    return { wch: Math.max(width + 3, 10) };
+  setNotice("field-notice", "Uploading workbook for memory-efficient processing…", "");
+  const response = await fetch("/api/field-result", {
+    method: "POST",
+    body: file,
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    cache: "no-store",
+    credentials: "same-origin"
   });
-  for (const address of Object.keys(outputSheet)) {
-    if (address.startsWith("!")) continue;
-    outputSheet[address].s = { font: { name: "Calibri", sz: 9 } };
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    const isStaticHosting = location.protocol === "file:" ||
+      location.hostname.endsWith(".github.io");
+    if (response.status === 404 && isStaticHosting) {
+      return processFieldResultInBrowser(file);
+    }
+    if (response.status === 404) {
+      throw new Error("The streaming Field Result server is unavailable. Restart the app with npm.cmd start; the Python static server cannot process large workbooks.");
+    }
+    throw new Error(`The Field Result server returned an invalid response (HTTP ${response.status}).`);
   }
-  XLSX.utils.book_append_sheet(outputBook, outputSheet, "RESULT");
-  let outputArray = XLSX.write(outputBook, { bookType: "xlsx", type: "array", cellStyles: true });
-  const styledWorkbook = await JSZip.loadAsync(outputArray);
-  const stylesFile = styledWorkbook.file("xl/styles.xml");
-  if (!stylesFile) throw new Error("Could not apply the Field Result workbook formatting.");
-  let stylesXml = await stylesFile.async("string");
-  const fontSize = stylesXml.match(/<sz val="[^"]+"\s*\/>/);
-  if (!fontSize) throw new Error("Could not apply the Field Result workbook font size.");
-  stylesXml = stylesXml.replace(fontSize[0], '<sz val="9"/>');
-  styledWorkbook.file("xl/styles.xml", stylesXml);
-  outputArray = await styledWorkbook.generateAsync({ type: "uint8array" });
+  if (!response.ok) {
+    throw new Error(result.error || `Field Result processing failed (HTTP ${response.status}).`);
+  }
+
+  const output = document.getElementById("field-output");
+  output.replaceChildren();
+  renderDownloads(output, [
+    {
+      label: `Download Extracted File (${result.workbookName})`,
+      icon: "sheet",
+      action: () => downloadUrl(`/api/field-result/${result.id}/workbook`, result.workbookName)
+    },
+    {
+      label: "Download Ref Code & Field Name CSV (fieldman.csv)",
+      icon: "file-text",
+      action: () => downloadUrl(`/api/field-result/${result.id}/csv`, "fieldman.csv")
+    }
+  ]);
+  const previewObjects = result.previewRows.map((row) =>
+    Object.fromEntries(row.map((value, index) => [String.fromCharCode(65 + index), value]))
+  );
+  renderTable(
+    output,
+    `Extracted Data Preview (first ${previewObjects.length.toLocaleString()} of ${result.rows.toLocaleString()} rows)`,
+    ["A", "B", "C", "D", "E", "F", "G", "H"],
+    previewObjects
+  );
+  return `${result.rows.toLocaleString()} row(s) extracted. Preview shows up to 100 rows.`;
+}
+
+function downloadUrl(url, filename) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+async function processFieldResultInBrowser(file) {
+  const { outputArray, previewRows, totalRows, extraCsvBlob } = await new Promise((resolve, reject) => {
+    const fieldWorker = new Worker("field-result-worker.js?v=4");
+    fieldWorker.onmessage = ({ data }) => {
+      if (data.type === "error") {
+        fieldWorker.terminate();
+        reject(new Error(data.message));
+      } else if (data.type === "phase") {
+        const total = data.totalRows ? ` (${data.totalRows.toLocaleString()} rows)` : "";
+        setNotice("field-notice", `${data.phase}${total}…`, "");
+      } else if (data.type === "progress") {
+        setNotice(
+          "field-notice",
+          `Extracting columns: ${data.processedRows.toLocaleString()} of ${data.totalRows.toLocaleString()} rows…`,
+          ""
+        );
+      } else if (data.type === "complete") {
+        fieldWorker.terminate();
+        resolve(data);
+      }
+    };
+    fieldWorker.onerror = () => {
+      fieldWorker.terminate();
+      reject(new Error("Field Result background processing failed. The workbook may be too large for the available browser memory; try splitting it into smaller workbooks."));
+    };
+    fieldWorker.postMessage({ file });
+  });
   const date = new Date();
   const dateStamp = `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}-${date.getFullYear()}`;
   const workbookName = `FIELD RESULT ${dateStamp}.xlsx`;
-  const extraCsv = toCsv(["Ref Code", "Field Name"], extraRows);
   const output = document.getElementById("field-output");
   output.replaceChildren();
   renderDownloads(output, [
     { label: `Download Extracted File (${workbookName})`, icon: "sheet", action: () => downloadBlob(new Blob([outputArray], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), workbookName) },
-    { label: "Download Ref Code & Field Name CSV (fieldman.csv)", icon: "file-text", action: () => downloadText(extraCsv, "fieldman.csv") }
+    { label: "Download Ref Code & Field Name CSV (fieldman.csv)", icon: "file-text", action: () => downloadBlob(extraCsvBlob, "fieldman.csv") }
   ]);
-  renderTable(output, "Extracted Data Preview", ["A", "B", "C", "D", "E", "F", "G", "H"], targetRows.map((row) => Object.fromEntries(row.map((value, index) => [String.fromCharCode(65 + index), dateToUsString(value)]))));
-  return `${targetRows.length.toLocaleString()} row(s) extracted.`;
+  const previewObjects = previewRows.map((row) =>
+    Object.fromEntries(row.map((value, index) => [String.fromCharCode(65 + index), value]))
+  );
+  renderTable(
+    output,
+    `Extracted Data Preview (first ${previewRows.length.toLocaleString()} of ${totalRows.toLocaleString()} rows)`,
+    ["A", "B", "C", "D", "E", "F", "G", "H"],
+    previewObjects
+  );
+  return `${totalRows.toLocaleString()} row(s) extracted. Preview shows up to 100 rows.`;
 }
 
 function grayscaleImageData(imageData) {
@@ -715,18 +827,57 @@ async function processSignatures() {
   return `${signatures.length} signature(s) extracted.`;
 }
 
-async function runProcess(form, noticeId, processor) {
+const fieldResultTimings = [];
+const INITIAL_FIELD_RESULT_MS_PER_MIB = 5000;
+
+function estimateFieldResultDuration(fileSize) {
+  const mebibytes = Math.max(fileSize / (1024 * 1024), 0.1);
+  const measuredRates = fieldResultTimings.map(({ duration, size }) => duration / Math.max(size / (1024 * 1024), 0.1));
+  const msPerMib = measuredRates.length
+    ? measuredRates.reduce((total, rate) => total + rate, 0) / measuredRates.length
+    : INITIAL_FIELD_RESULT_MS_PER_MIB;
+  return Math.max(15000, 10000 + mebibytes * msPerMib);
+}
+
+function formatRemainingTime(milliseconds) {
+  const totalSeconds = Math.ceil(milliseconds / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (!minutes) return `${seconds} sec`;
+  return seconds ? `${minutes} min ${seconds} sec` : `${minutes} min`;
+}
+
+async function runProcess(form, noticeId, processor, estimate) {
   const button = form.querySelector('button[type="submit"]');
   const originalContents = Array.from(button.childNodes, (node) => node.cloneNode(true));
   button.disabled = true;
   button.textContent = "Processing...";
   clearNotice(noticeId);
+  const startedAt = performance.now();
+  let estimateTimer;
+  if (estimate) {
+    const updateEstimate = () => {
+      const remaining = estimate.totalMs - (performance.now() - startedAt);
+      setNotice(
+        noticeId,
+        remaining > 0
+          ? `Uploading and processing: about ${formatRemainingTime(remaining)} remaining.`
+          : "Uploading or processing is taking longer than the initial estimate.",
+        ""
+      );
+    };
+    updateEstimate();
+    estimateTimer = window.setInterval(updateEstimate, 1000);
+  }
   try {
+    if (estimate) await new Promise((resolve) => window.requestAnimationFrame(resolve));
     const result = await processor();
+    if (estimate?.onSuccess) estimate.onSuccess(performance.now() - startedAt);
     setNotice(noticeId, result, "success");
   } catch (error) {
     setNotice(noticeId, error instanceof Error ? error.message : String(error), "error");
   } finally {
+    window.clearInterval(estimateTimer);
     button.disabled = false;
     button.replaceChildren(...originalContents);
   }
@@ -734,14 +885,145 @@ async function runProcess(form, noticeId, processor) {
 
 const navButtons = document.querySelectorAll(".nav-button");
 const content = document.querySelector(".content");
+const vrpNotifications = document.getElementById("vrp-notifications");
+const notificationPopover = document.getElementById("notification-popover");
+const notificationStatus = document.getElementById("notification-status");
+const notificationCount = document.getElementById("notification-count");
+const notificationBadge = document.getElementById("notification-badge");
+const notificationExport = document.getElementById("notification-export");
+let hasLoadedNotificationCount = false;
 let toolTransitionTimer;
 let activeTool = "vrp";
+
+function showNotificationStatus(message, state = "") {
+  notificationStatus.textContent = message;
+  notificationStatus.dataset.state = state;
+}
+
+function closeNotificationPopover() {
+  notificationPopover.hidden = true;
+  vrpNotifications.setAttribute("aria-expanded", "false");
+}
+
+function formatRecordCount(count) {
+  return `${count.toLocaleString()} ${count === 1 ? "record" : "records"} in the selected Lark view`;
+}
+
+async function getNotificationError(response) {
+  if (response.status === 404) {
+    return "The Lark API is not available on this server. Start the protected app with npm.cmd start.";
+  }
+  try {
+    const body = await response.json();
+    return body.error || `Request failed (${response.status}).`;
+  } catch {
+    return `Request failed (${response.status}).`;
+  }
+}
+
+async function requestLocalNotificationApi(path) {
+  let response;
+  try {
+    response = await fetch(path, {
+      cache: "no-store",
+      credentials: "same-origin"
+    });
+  } catch {
+    throw new Error("Cannot reach the protected app server. Start it with npm.cmd start after updating .dev.vars.");
+  }
+  if (!response.ok) throw new Error(await getNotificationError(response));
+  return response;
+}
+
+async function refreshLarkNotifications() {
+  const refreshButton = document.getElementById("notification-refresh");
+  refreshButton.disabled = true;
+  notificationCount.textContent = "Checking…";
+  notificationBadge.hidden = true;
+  notificationExport.disabled = true;
+  showNotificationStatus("Checking the Lark table…");
+  try {
+    const response = await requestLocalNotificationApi("/api/notifications");
+    const result = await response.json();
+    if (!Number.isSafeInteger(result.count) || result.count < 0) {
+      throw new Error("The Lark API returned an invalid record count.");
+    }
+    notificationCount.textContent = formatRecordCount(result.count);
+    notificationBadge.textContent = result.count > 999 ? "999+" : String(result.count);
+    notificationBadge.hidden = result.count === 0;
+    vrpNotifications.setAttribute("aria-label", `Notifications, ${result.count} records`);
+    hasLoadedNotificationCount = true;
+    notificationExport.disabled = false;
+    const checkedAt = new Date(result.checkedAt);
+    const timeLabel = Number.isNaN(checkedAt.getTime())
+      ? ""
+      : ` Last checked ${checkedAt.toLocaleTimeString()}.`;
+    showNotificationStatus(`Connected to the Lark table.${timeLabel}`, "success");
+  } catch (error) {
+    hasLoadedNotificationCount = false;
+    notificationCount.textContent = "Unavailable";
+    notificationExport.disabled = true;
+    vrpNotifications.setAttribute("aria-label", "Notifications");
+    showNotificationStatus(error.message || "Could not check the Lark table.", "error");
+  } finally {
+    refreshButton.disabled = false;
+  }
+}
+
+async function exportLarkRecords() {
+  notificationExport.disabled = true;
+  showNotificationStatus("Preparing the CSV export…");
+  try {
+    const response = await requestLocalNotificationApi("/api/export");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "NEW VRP ACCOUNTS FOR TAG_PIF WITH DL_JOREM FOR UPLOAD.csv";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showNotificationStatus("CSV export downloaded.", "success");
+  } catch (error) {
+    showNotificationStatus(error.message || "Could not export the Lark table.", "error");
+  } finally {
+    notificationExport.disabled = !hasLoadedNotificationCount;
+  }
+}
+
+vrpNotifications.addEventListener("click", () => {
+  const open = notificationPopover.hidden;
+  notificationPopover.hidden = !open;
+  vrpNotifications.setAttribute("aria-expanded", String(open));
+  if (open) refreshLarkNotifications();
+});
+
+document.getElementById("notification-close").addEventListener("click", closeNotificationPopover);
+document.getElementById("notification-refresh").addEventListener("click", refreshLarkNotifications);
+notificationExport.addEventListener("click", exportLarkRecords);
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("#notification-control")) closeNotificationPopover();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeNotificationPopover();
+});
+
+window.setInterval(() => {
+  if (activeTool === "vrp" && document.visibilityState === "visible") {
+    refreshLarkNotifications();
+  }
+}, 5 * 60 * 1000);
+
+refreshLarkNotifications();
 
 navButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const selectedTool = button.dataset.tool;
     if (selectedTool === activeTool && !toolTransitionTimer) return;
 
+    if (selectedTool !== "vrp") closeNotificationPopover();
     window.clearTimeout(toolTransitionTimer);
     navButtons.forEach((item) => item.setAttribute("aria-current", item === button ? "page" : "false"));
     content.classList.add("is-transitioning");
@@ -752,6 +1034,7 @@ navButtons.forEach((button) => {
       document.getElementById("current-tool").textContent = toolDetails[selectedTool].title;
       document.getElementById("page-title").textContent = toolDetails[selectedTool].title;
       document.getElementById("page-subtitle").textContent = toolDetails[selectedTool].subtitle;
+      vrpNotifications.hidden = selectedTool !== "vrp";
       activeTool = selectedTool;
       toolTransitionTimer = undefined;
       window.requestAnimationFrame(() => content.classList.remove("is-transitioning"));
@@ -762,6 +1045,8 @@ navButtons.forEach((button) => {
 const versionSelect = document.getElementById("vrp-version");
 const vrpFiles = document.getElementById("vrp-files");
 const vrpFileList = document.getElementById("vrp-file-list");
+const extractRefCodesButton = document.getElementById("vrp-extract-ref-codes");
+const extractRefCodesStatus = document.getElementById("vrp-extract-ref-codes-status");
 
 function updateVrpUploadMode(clearSelection = true) {
   const isMc2 = versionSelect.value === "MC2";
@@ -778,6 +1063,9 @@ function updateVrpUploadMode(clearSelection = true) {
   if (clearSelection) {
     vrpFiles.value = "";
     vrpFileList.textContent = "";
+    extractRefCodesButton.disabled = true;
+    extractRefCodesStatus.textContent = "";
+    delete extractRefCodesStatus.dataset.state;
   }
 }
 
@@ -787,7 +1075,30 @@ function showSelectedFiles(input, output) {
 }
 
 versionSelect.addEventListener("change", () => updateVrpUploadMode());
-vrpFiles.addEventListener("change", () => showSelectedFiles(vrpFiles, vrpFileList));
+vrpFiles.addEventListener("change", () => {
+  showSelectedFiles(vrpFiles, vrpFileList);
+  extractRefCodesButton.disabled = !vrpFiles.files.length;
+  extractRefCodesStatus.textContent = "";
+  delete extractRefCodesStatus.dataset.state;
+});
+extractRefCodesButton.addEventListener("click", async () => {
+  extractRefCodesButton.disabled = true;
+  extractRefCodesButton.textContent = "Extracting...";
+  extractRefCodesStatus.textContent = "";
+  delete extractRefCodesStatus.dataset.state;
+  try {
+    const codes = await extractVrpReferenceCodes();
+    await copyToClipboard(codes.join("\n"));
+    extractRefCodesStatus.textContent = `Copied ${codes.length.toLocaleString()} unique REF CODE(s).`;
+    extractRefCodesStatus.dataset.state = "success";
+  } catch (error) {
+    extractRefCodesStatus.textContent = error instanceof Error ? error.message : String(error);
+    extractRefCodesStatus.dataset.state = "error";
+  } finally {
+    extractRefCodesButton.textContent = "Get REF CODE";
+    extractRefCodesButton.disabled = !vrpFiles.files.length;
+  }
+});
 document.getElementById("field-file").addEventListener("change", (event) => {
   showSelectedFiles(event.currentTarget, document.getElementById("field-file-list"));
 });
@@ -801,7 +1112,15 @@ document.getElementById("vrp-form").addEventListener("submit", (event) => {
 });
 document.getElementById("field-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  runProcess(event.currentTarget, "field-notice", processFieldResult);
+  const file = document.getElementById("field-file").files[0];
+  const estimate = file ? {
+    totalMs: estimateFieldResultDuration(file.size),
+    onSuccess: (duration) => {
+      fieldResultTimings.push({ duration, size: file.size });
+      if (fieldResultTimings.length > 5) fieldResultTimings.shift();
+    }
+  } : undefined;
+  runProcess(event.currentTarget, "field-notice", processFieldResult, estimate);
 });
 document.getElementById("esign-form").addEventListener("submit", (event) => {
   event.preventDefault();

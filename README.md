@@ -1,30 +1,57 @@
 # Workspace Tools V2
 
-Browser-based file tools. Uploaded files are processed locally in your browser and are not sent to a processing server.
+Browser-based file tools. VRP Mapper and E-SIGN process in the browser; Field Result uses the local Node.js server for memory-efficient workbook streaming. The optional Lark integration also uses the local server so its app secret stays out of browser code.
 
-## Run locally
+## Run locally with the Lark notifications
 
-Open `index.html` from a local web server so the reference workbooks and scripts can load correctly. For example, from the project folder run:
+1. Fill in `.dev.vars` (already created locally with the app ID and table/view IDs from your link). Replace `LARK_APP_SECRET` with the **rotated** secret. If `.dev.vars` is missing, copy `.dev.vars.example` first.
+2. Keep `.dev.vars` private. It is ignored by Git. Never paste the app secret or dashboard password into chat or commit them.
+3. Install the Field Result streaming processor dependency once:
 
-```powershell
-python -m http.server 8001 --bind 127.0.0.1
-```
+   ```powershell
+   python -m pip install -r requirements.txt
+   ```
 
-Then open `http://localhost:8001`. The site uses the checked-in browser libraries in `vendor/` and local Inter font files in `assets/fonts/`; no Node.js setup or external font request is required.
+4. In the Lark custom app, enable and publish `wiki:wiki:readonly` and either `bitable:app:readonly` or `base:record:retrieve`. The Bitable must also be shared with the custom app: in the Base's **Share / Manage permissions**, add the app and grant read access to the target table/view. If advanced permissions are on, grant the app the required role on that Base/table as well. A user being signed in to Lark in the browser does not grant these permissions to the server-side app identity.
+5. Start the server from the project folder:
+
+   ```powershell
+   npm.cmd start
+   ```
+
+6. In VS Code's **Ports** panel, set port `8001` visibility to **Private** and allow only your own signed-in account. Then change `TUNNEL_ACCESS_MODE=unconfirmed` to `TUNNEL_ACCESS_MODE=private` in `.dev.vars`, start the server, and forward port `8001`. Open `https://cfbbqbh6-8001.asse.devtunnels.ms`; the tunnel applies your VS Code/GitHub account access and the app opens without a separate username/password prompt. The bell uses the same private connection automatically—no Worker URL or key needs to be entered in the UI.
+
+The server binds to `127.0.0.1:8001`; the **Private** Dev Tunnel is the access control for the app and its Lark API. The server refuses requests unless `TUNNEL_ACCESS_MODE=private` is set in the ignored `.dev.vars` file, and reads all Lark secrets from that file. It checks the Lark view on page load and every five minutes. Export downloads the selected view as `NEW VRP ACCOUNTS FOR TAG_PIF WITH DL_JOREM FOR UPLOAD.csv`, using the matching 34-column upload template (blank values are kept in their columns). Counts and exports support views with up to 24,000 records.
+
+### Lark configuration
+
+In `.dev.vars`, these settings are already filled in where available; use the following variable names:
+
+- `PUBLIC_APP_ORIGIN`: exact HTTPS origin of the forwarded VS Code tunnel (no trailing slash).
+- `TUNNEL_ACCESS_MODE=private`: set this only after the actual VS Code port visibility is **Private**. This configuration flag alone does not make the tunnel private.
+- `LARK_APP_ID`, `LARK_APP_SECRET`: custom app credentials. Use the rotated secret, not the one previously shared in chat.
+- `LARK_WIKI_TOKEN`, `LARK_TABLE_ID`, `LARK_VIEW_ID`: identifiers from the Lark wiki/Bitable link.
+
+If the Dev Tunnel URL changes, update `PUBLIC_APP_ORIGIN` and restart the server. **Do not set the tunnel to Public while the app server is running**: there is intentionally no app password prompt in private-tunnel mode. Stopping `npm start` disconnects the Lark notifications; VS Code forwarding is not a permanent production backend.
+
+### Lark reports `1254302: RolePermNotAllow`
+
+Lark denied the custom app's role on the Bitable. Confirm the read scope is enabled and published in the Lark Developer Console, then share the Bitable itself with the app and grant read access to the table/view. For Bases with advanced permissions, make sure the app's role is allowed to query records. Restart the local server after changing `.dev.vars`; publishing permission-scope changes may also require republishing the Lark app.
 
 ## Tools
 
-- **VRP Mapper:** process one or more MC2 CSVs or an FCL `.xlsx` workbook with a `SUMMARY` sheet. Optionally filter by reference code. Downloads the mapped template CSV and release CSV. Mapping uses `demand_letter_template.csv`, `cmd_id.xlsx`, and `amounts.csv`.
-- **Field Result:** extracts columns from the `RESULT` sheet in an `.xlsx` workbook and downloads a formatted workbook plus `fieldman.csv`.
+- **VRP Mapper:** process one or more MC2 CSVs or an FCL `.xlsx` workbook with a `SUMMARY` sheet. Use **Get REF CODE (Column M)** to copy unique codes from the selected source file(s) to the clipboard, or enter codes manually in the reference-code box to filter processing. Downloads the mapped template CSV and release CSV. Mapping uses `demand_letter_template.csv`, `cmd_id.xlsx`, and `amounts.csv`.
+- **Field Result:** uploads the selected `.xlsx` workbook to the local Node server, which uses Python `openpyxl` read-only mode to stream the `RESULT` sheet row by row and writes a formatted workbook plus `fieldman.csv` to temporary storage. The browser only receives the first 100 preview rows. Uploads are limited to 512 MB; actual processing time depends on workbook contents and device performance. Output files expire after 30 minutes. GitHub Pages has no processing backend and uses the browser-only fallback for smaller workbooks.
 - **E-SIGN FIXER:** detects signatures on a PNG/JPG page and downloads transparent PNGs in a ZIP file and a Word document.
 
-## Publish with GitHub Pages
+## Publish the static tools with GitHub Pages
 
-1. Push the repository to GitHub.
-2. Open **Settings → Pages**.
-3. Under **Build and deployment**, choose **Deploy from a branch**.
-4. Select the branch containing `index.html` and the `/ (root)` folder, then save.
+GitHub Pages can host the browser-only tools, but it cannot run the local Lark API server. The automatic Lark notifications work only when the protected Node server is running through the forwarded port (or when a separately secured production backend is configured). Do not publish private reference files such as `cmd_id.xlsx` or `amounts.csv` to a public repository.
 
-The app and its file processing run in the visitor's browser; GitHub Pages does not need a Python backend. Keep the reference files in the repository root so VRP Mapper can fetch them. Do not publish private or confidential reference files to a public repository.
+The checked-in browser libraries and their licenses are in `vendor/`; local fonts are in `assets/fonts/`.
 
-Bundled libraries and their licenses are included in `vendor/`.
+Run the API and login tests with:
+
+```powershell
+npm.cmd test
+```
