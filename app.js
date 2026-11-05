@@ -1049,6 +1049,52 @@ const vrpFiles = document.getElementById("vrp-files");
 const vrpFileList = document.getElementById("vrp-file-list");
 const extractRefCodesButton = document.getElementById("vrp-extract-ref-codes");
 const extractRefCodesStatus = document.getElementById("vrp-extract-ref-codes-status");
+const themeSetting = document.getElementById("theme-setting");
+const themePreferenceKey = "workspace-tools-theme";
+const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+const themeModes = ["system", "light", "dark"];
+const themeModeDetails = {
+  system: { label: "System setting", icon: "icon-theme-system" },
+  light: { label: "Light mode", icon: "icon-theme-light" },
+  dark: { label: "Dark mode", icon: "icon-theme-dark" }
+};
+
+function applyTheme(preference, savePreference = false) {
+  const validPreference = themeModes.includes(preference)
+    ? preference
+    : "system";
+  const modeDetails = themeModeDetails[validPreference];
+  const useDarkTheme = validPreference === "dark" ||
+    validPreference === "system" && systemThemeQuery.matches;
+  document.documentElement.dataset.themeSetting = validPreference;
+  document.documentElement.dataset.theme = useDarkTheme ? "dark" : "light";
+  themeSetting.title = `Theme: ${modeDetails.label}`;
+  themeSetting.setAttribute("aria-label", `Theme: ${modeDetails.label}. Click to change.`);
+  themeSetting.querySelector("use").setAttribute("href", `#${modeDetails.icon}`);
+  document.querySelector('meta[name="theme-color"]').content = useDarkTheme ? "#111827" : "#073BA8";
+  if (savePreference) {
+    try {
+      localStorage.setItem(themePreferenceKey, validPreference);
+    } catch {
+      setNotice("vrp-notice", "Theme changed, but this browser could not save the preference.", "error");
+    }
+  }
+}
+
+let savedThemePreference = "system";
+try {
+  savedThemePreference = localStorage.getItem(themePreferenceKey) || "system";
+} catch {
+  savedThemePreference = "system";
+}
+applyTheme(savedThemePreference);
+themeSetting.addEventListener("click", () => {
+  const currentIndex = themeModes.indexOf(document.documentElement.dataset.themeSetting);
+  applyTheme(themeModes[(currentIndex + 1) % themeModes.length], true);
+});
+systemThemeQuery.addEventListener("change", () => {
+  if (document.documentElement.dataset.themeSetting === "system") applyTheme("system");
+});
 
 function updateVrpUploadMode(clearSelection = true) {
   const isMc2 = versionSelect.value === "MC2";

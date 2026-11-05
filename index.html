@@ -6,6 +6,21 @@
   <meta name="theme-color" content="#073BA8">
   <link rel="icon" type="image/svg+xml" href="assets/workspace-tools-icon.svg?v=3">
   <title>Workspace Tools V2</title>
+  <script>
+    (() => {
+      let preference = "system";
+      try {
+        preference = localStorage.getItem("workspace-tools-theme") || "system";
+      } catch {
+        preference = "system";
+      }
+      if (!["system", "light", "dark"].includes(preference)) preference = "system";
+      const dark = preference === "dark" ||
+        preference === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.dataset.themeSetting = preference;
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    })();
+  </script>
   <style>
     @font-face {
       font-family: "Inter";
@@ -192,6 +207,10 @@
 
     .breadcrumb { color: var(--muted); font-size: 12px; }
     .breadcrumb strong { color: var(--ink); font-weight: 650; }
+    .topbar-actions { display: flex; align-items: center; gap: 12px; }
+    .theme-button { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border: 1px solid rgb(34 159 194 / 42%); border-radius: 13px; color: var(--brand-deep); background: linear-gradient(145deg, rgb(255 255 255 / 90%), rgb(188 235 242 / 55%)); box-shadow: 0 5px 14px rgb(7 59 168 / 9%), inset 0 1px 0 #fff; transition: transform .16s ease, box-shadow .16s ease, background .16s ease; }
+    .theme-button:hover { transform: translateY(-1px); background: linear-gradient(145deg, #fff, rgb(188 235 242 / 78%)); box-shadow: 0 8px 18px rgb(7 59 168 / 15%), inset 0 1px 0 #fff; }
+    .theme-button .icon { width: 19px; height: 19px; }
     .notification-control { position: relative; flex: 0 0 auto; }
     .notification-button { position: relative; display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border: 1px solid rgb(34 159 194 / 42%); border-radius: 13px; color: var(--brand-deep); background: linear-gradient(145deg, rgb(255 255 255 / 90%), rgb(188 235 242 / 55%)); box-shadow: 0 5px 14px rgb(7 59 168 / 9%), inset 0 1px 0 #fff; transition: transform .16s ease, box-shadow .16s ease, background .16s ease; }
     .notification-button:hover { transform: translateY(-1px); background: linear-gradient(145deg, #fff, rgb(188 235 242 / 78%)); box-shadow: 0 8px 18px rgb(7 59 168 / 15%), inset 0 1px 0 #fff; }
@@ -346,6 +365,128 @@
     .preview-image { display: block; max-width: 100%; max-height: 280px; margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; }
     .tool-view[hidden] { display: none; }
 
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --ink: #e7edf8;
+      --muted: #a4b0c5;
+      --line: #354158;
+      --paper: #1b2537;
+      --canvas: #111827;
+      --glass: rgb(30 41 59 / 78%);
+      --glass-strong: rgb(30 41 59 / 92%);
+      --glass-border: rgb(148 163 184 / 20%);
+      --brand-deep: #8bc5ff;
+      --brand: #76b7f7;
+      --brand-light: #49bfd1;
+      --status-bg: #1c2a3a;
+      --shadow: 0 20px 55px rgb(0 0 0 / 28%);
+    }
+
+    :root[data-theme="dark"] body {
+      background:
+        radial-gradient(ellipse at 88% 12%, rgb(34 159 194 / 16%), transparent 35rem),
+        radial-gradient(ellipse at 34% 88%, rgb(87 73 135 / 14%), transparent 30rem),
+        linear-gradient(135deg, #111827 0%, #172235 48%, #111827 100%);
+    }
+    :root[data-theme="dark"] body::before {
+      background:
+        radial-gradient(ellipse at 88% 34%, rgb(34 159 194 / 13%), transparent 24rem),
+        radial-gradient(ellipse at 43% 82%, rgb(129 108 220 / 10%), transparent 21rem);
+    }
+    :root[data-theme="dark"] .sidebar {
+      border-right-color: rgb(148 163 184 / 13%);
+      background: linear-gradient(155deg, rgb(15 23 42 / 98%), rgb(23 37 61 / 96%));
+      box-shadow: 10px 0 40px rgb(0 0 0 / 25%);
+    }
+    :root[data-theme="dark"] .topbar {
+      border-bottom-color: rgb(73 165 188 / 35%);
+      background: rgb(17 24 39 / 82%);
+      box-shadow: 0 8px 26px rgb(0 0 0 / 14%);
+    }
+    :root[data-theme="dark"] .panel {
+      background: linear-gradient(145deg, rgb(30 41 59 / 90%), rgb(23 33 49 / 88%));
+      box-shadow: var(--shadow), inset 0 1px 0 rgb(255 255 255 / 5%);
+    }
+    :root[data-theme="dark"] .panel:hover {
+      border-color: rgb(148 163 184 / 30%);
+      box-shadow: 0 25px 65px rgb(0 0 0 / 30%), inset 0 1px 0 rgb(255 255 255 / 6%);
+    }
+    :root[data-theme="dark"] .panel-heading p,
+    :root[data-theme="dark"] .field-label { color: #c1ccdc; }
+    :root[data-theme="dark"] .panel-icon { color: #173c60; }
+    :root[data-theme="dark"] .nav-button[aria-current="page"],
+    :root[data-theme="dark"] .button-primary { color: #17345a; }
+    :root[data-theme="dark"] select,
+    :root[data-theme="dark"] textarea {
+      border-color: #3a4962;
+      color: var(--ink);
+      background: rgb(15 23 42 / 70%);
+      box-shadow: inset 0 1px 2px rgb(0 0 0 / 20%);
+    }
+    :root[data-theme="dark"] select:focus,
+    :root[data-theme="dark"] textarea:focus {
+      border-color: var(--brand-light);
+      box-shadow: 0 0 0 3px rgb(34 159 194 / 20%);
+    }
+    :root[data-theme="dark"] textarea::placeholder { color: #8290a6; }
+    :root[data-theme="dark"] .drop-zone {
+      border-color: rgb(73 165 188 / 56%);
+      background: linear-gradient(145deg, rgb(15 23 42 / 65%), rgb(34 58 76 / 48%));
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+    }
+    :root[data-theme="dark"] .drop-zone:hover { background: linear-gradient(145deg, rgb(20 32 51 / 90%), rgb(34 70 87 / 60%)); }
+    :root[data-theme="dark"] .upload-icon { border-color: #3a4962; color: #8bc5ff; background: #202d41; }
+    :root[data-theme="dark"] .upload-title,
+    :root[data-theme="dark"] .output-card strong { color: #dce5f2; }
+    :root[data-theme="dark"] .upload-help,
+    :root[data-theme="dark"] .field-hint,
+    :root[data-theme="dark"] .output-card span { color: #9aa8bb; }
+    :root[data-theme="dark"] .file-list { color: #8bc5ff; }
+    :root[data-theme="dark"] .button-secondary {
+      border-color: #3a4962;
+      color: #c0cce0;
+      background: rgb(30 41 59 / 86%);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+    }
+    :root[data-theme="dark"] .button-secondary:hover { border-color: #536783; color: #fff; background: #29374d; }
+    :root[data-theme="dark"] .output-card,
+    :root[data-theme="dark"] .table-wrap {
+      border-color: rgb(148 163 184 / 19%);
+      background: rgb(19 29 44 / 84%);
+      box-shadow: 0 7px 20px rgb(0 0 0 / 14%);
+    }
+    :root[data-theme="dark"] .result-table th { color: #b7d8ff; background: rgb(35 49 70 / 96%); }
+    :root[data-theme="dark"] .result-table td { color: #d0d9e7; }
+    :root[data-theme="dark"] .notice { border-color: rgb(148 163 184 / 20%); color: #c2cfe1; background: rgb(30 41 59 / 88%); }
+    :root[data-theme="dark"] .notice.success { border-color: #506334; color: #d6ed9c; background: #26321e; }
+    :root[data-theme="dark"] .notice.error { border-color: rgb(248 113 113 / 35%); color: #fda4af; background: rgb(127 29 29 / 18%); }
+    :root[data-theme="dark"] .notification-button {
+      border-color: rgb(73 165 188 / 40%);
+      color: #b7d8ff;
+      background: linear-gradient(145deg, #26364c, #1d3043);
+      box-shadow: 0 5px 14px rgb(0 0 0 / 20%), inset 0 1px 0 rgb(255 255 255 / 5%);
+    }
+    :root[data-theme="dark"] .notification-button:hover { background: linear-gradient(145deg, #30445e, #244157); }
+    :root[data-theme="dark"] .theme-button {
+      border-color: rgb(73 165 188 / 40%);
+      color: #b7d8ff;
+      background: linear-gradient(145deg, #26364c, #1d3043);
+      box-shadow: 0 5px 14px rgb(0 0 0 / 20%), inset 0 1px 0 rgb(255 255 255 / 5%);
+    }
+    :root[data-theme="dark"] .theme-button:hover { background: linear-gradient(145deg, #30445e, #244157); }
+    :root[data-theme="dark"] .notification-badge { border-color: #1b2537; color: #17345a; }
+    :root[data-theme="dark"] .notification-popover {
+      border-color: rgb(148 163 184 / 25%);
+      background: rgb(24 35 52 / 97%);
+      box-shadow: 0 18px 48px rgb(0 0 0 / 35%), inset 0 1px 0 rgb(255 255 255 / 5%);
+    }
+    :root[data-theme="dark"] .notification-close { border-color: #3a4962; color: #b4c0d2; background: #253247; }
+    :root[data-theme="dark"] .notification-count { color: #b7d8ff; }
+    :root[data-theme="dark"] .notification-status[data-state="error"],
+    :root[data-theme="dark"] .field-action-status[data-state="error"] { color: #fda4af; }
+    :root[data-theme="dark"] .notification-status[data-state="success"],
+    :root[data-theme="dark"] .field-action-status[data-state="success"] { color: #a7e4c1; }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
     }
@@ -369,6 +510,8 @@
       .main { margin-left: 0; }
       .topbar { min-height: 54px; padding: 10px 17px; }
       .breadcrumb { font-size: 10px; }
+      .topbar-actions { gap: 8px; }
+      .theme-button { width: 36px; height: 36px; }
       .content { padding: 25px 16px 40px; }
       .panel { padding: 18px; }
       .form-grid { grid-template-columns: 1fr; gap: 15px; }
@@ -396,6 +539,9 @@
     <symbol id="icon-file-text" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8 13h8M8 17h8"/></symbol>
     <symbol id="icon-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></symbol>
     <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="icon-theme-system" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="icon-theme-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></symbol>
+    <symbol id="icon-theme-dark" viewBox="0 0 24 24"><path d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5 8.5 8.5 0 1 0 20.5 15.5Z"/></symbol>
   </svg>
   <div class="app-shell">
     <aside class="sidebar">
@@ -426,25 +572,30 @@
     <main class="main">
       <header class="topbar">
         <div class="breadcrumb">Workspace <span aria-hidden="true">/</span> <strong id="current-tool">VRP Mapper</strong></div>
-        <div class="notification-control" id="notification-control">
-          <button class="notification-button" id="vrp-notifications" type="button" aria-label="Notifications" title="Notifications" aria-expanded="false" aria-controls="notification-popover">
-            <svg class="icon" aria-hidden="true"><use href="#icon-bell"></use></svg>
-            <span class="notification-badge" id="notification-badge" hidden></span>
+        <div class="topbar-actions">
+          <button class="theme-button" id="theme-setting" type="button" aria-label="Theme: System setting. Click to change." title="Theme: System setting">
+            <svg class="icon" aria-hidden="true"><use href="#icon-theme-system"></use></svg>
           </button>
-          <section class="notification-popover" id="notification-popover" hidden aria-label="Lark Base notifications">
-            <div class="notification-popover-header">
-              <strong>VRP Mapper notifications</strong>
-              <button class="notification-close" id="notification-close" type="button" aria-label="Close notifications">
-                <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
-              </button>
-            </div>
-            <p class="notification-count" id="notification-count">Checking…</p>
-            <p class="notification-status" id="notification-status" role="status" aria-live="polite">Connecting to the configured Lark table.</p>
-            <div class="notification-actions">
-              <button class="button button-secondary" id="notification-refresh" type="button"><svg class="icon"><use href="#icon-rotate"></use></svg>Refresh</button>
-              <button class="button button-primary" id="notification-export" type="button" disabled><svg class="icon"><use href="#icon-download"></use></svg>Export CSV</button>
-            </div>
-          </section>
+          <div class="notification-control" id="notification-control">
+            <button class="notification-button" id="vrp-notifications" type="button" aria-label="Notifications" title="Notifications" aria-expanded="false" aria-controls="notification-popover">
+              <svg class="icon" aria-hidden="true"><use href="#icon-bell"></use></svg>
+              <span class="notification-badge" id="notification-badge" hidden></span>
+            </button>
+            <section class="notification-popover" id="notification-popover" hidden aria-label="Lark Base notifications">
+              <div class="notification-popover-header">
+                <strong>VRP Mapper notifications</strong>
+                <button class="notification-close" id="notification-close" type="button" aria-label="Close notifications">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+                </button>
+              </div>
+              <p class="notification-count" id="notification-count">Checking…</p>
+              <p class="notification-status" id="notification-status" role="status" aria-live="polite">Connecting to the configured Lark table.</p>
+              <div class="notification-actions">
+                <button class="button button-secondary" id="notification-refresh" type="button"><svg class="icon"><use href="#icon-rotate"></use></svg>Refresh</button>
+                <button class="button button-primary" id="notification-export" type="button" disabled><svg class="icon"><use href="#icon-download"></use></svg>Export CSV</button>
+              </div>
+            </section>
+          </div>
         </div>
       </header>
 
@@ -573,6 +724,6 @@
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>

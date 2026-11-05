@@ -40,6 +40,8 @@ Lark denied the custom app's role on the Bitable. Confirm the read scope is enab
 
 ## Tools
 
+Click the theme icon in the top bar to cycle between **System setting**, **Light mode**, and **Dark mode**. The icon indicates the current setting, which is saved in this browser.
+
 - **VRP Mapper:** process one or more MC2 CSVs or an FCL `.xlsx` workbook with a `SUMMARY` sheet. Use **Get REF CODE (Column M)** to copy unique codes from the selected source file(s) to the clipboard, or enter codes manually in the reference-code box to filter processing. Downloads the mapped template CSV and release CSV. Mapping uses `demand_letter_template.csv`, `cmd_id.xlsx`, and `amounts.csv`.
 - **Field Result:** uploads the selected `.xlsx` workbook to the local Node server, which uses Python `openpyxl` read-only mode to stream the `RESULT` sheet row by row and writes a formatted workbook plus `fieldman.csv` to temporary storage. The browser only receives the first 100 preview rows. Uploads are limited to 512 MB; actual processing time depends on workbook contents and device performance. Output files expire after 30 minutes. GitHub Pages has no processing backend and uses the browser-only fallback for smaller workbooks.
 - **E-SIGN FIXER:** detects signatures on a PNG/JPG page and downloads transparent PNGs in a ZIP file and a Word document.
