@@ -1103,6 +1103,7 @@ extractRefCodesButton.addEventListener("click", async () => {
 });
 document.getElementById("field-file").addEventListener("change", (event) => {
   showSelectedFiles(event.currentTarget, document.getElementById("field-file-list"));
+  document.getElementById("field-clear").disabled = !event.currentTarget.files.length;
 });
 document.getElementById("esign-file").addEventListener("change", (event) => {
   showSelectedFiles(event.currentTarget, document.getElementById("esign-file-list"));
@@ -1137,6 +1138,7 @@ document.getElementById("vrp-reset").addEventListener("click", () => {
 });
 document.getElementById("field-form").addEventListener("reset", () => {
   window.setTimeout(() => {
+    document.getElementById("field-clear").disabled = true;
     document.getElementById("field-file-list").textContent = "";
     clearNotice("field-notice");
     document.getElementById("field-output").replaceChildren();
