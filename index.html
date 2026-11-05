@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#073BA8">
-  <link rel="icon" type="image/svg+xml" href="assets/workspace-tools-icon.svg?v=3">
+  <link id="app-favicon" rel="icon" type="image/svg+xml" href="assets/workspace-tools-icon.svg?v=4">
   <title>Workspace Tools V2</title>
   <script>
     (() => {
@@ -252,6 +252,8 @@
 
     .panel:hover { border-color: #fff; box-shadow: 0 25px 65px rgb(7 59 168 / 13%), inset 0 1px 0 #fff; }
     .panel-heading { display: flex; align-items: flex-start; gap: 13px; margin-bottom: 21px; }
+    .field-settings-toggle { width: 40px; height: 40px; flex: 0 0 auto; margin-left: auto; padding: 0; }
+    .field-settings-toggle .icon { width: 19px; height: 19px; }
     .panel-icon {
       display: grid;
       width: 42px;
@@ -340,6 +342,33 @@
     .field-action-status { display: inline-block; margin: 9px 0 0 8px; font-size: 10px; line-height: 1.5; vertical-align: middle; }
     .field-action-status[data-state="success"] { color: #167347; }
     .field-action-status[data-state="error"] { color: #a7132b; }
+    .field-bank-summary { margin-top: 12px; }
+    .field-bank-dialog {
+      width: min(560px, calc(100vw - 32px));
+      max-height: min(78vh, 680px);
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid var(--glass-border);
+      border-radius: 18px;
+      color: var(--ink);
+      background: var(--paper);
+      box-shadow: 0 24px 80px rgb(7 20 48 / 35%);
+    }
+    .field-bank-dialog::backdrop { background: rgb(8 16 32 / 58%); backdrop-filter: blur(4px); }
+    .field-bank-dialog[open] { display: flex; flex-direction: column; }
+    .field-bank-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 20px 22px 14px; }
+    .field-bank-dialog-header h3 { margin: 0; font-size: 15px; }
+    .field-bank-dialog-header p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .field-bank-dialog-close { flex: 0 0 auto; padding: 0; }
+    .field-bank-dialog-body { padding: 8px 22px 22px; }
+    .field-campaign-options { display: flex; flex-wrap: wrap; gap: 9px; margin: 4px 0 22px; }
+    .field-bank-filter-label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 700; }
+    .field-bank-filter-row { display: flex; gap: 8px; }
+    .field-bank-filter-row input { min-width: 0; flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--paper); font: inherit; }
+    .field-bank-filter-help { margin: 7px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    .field-bank-dialog-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 22px 18px; border-top: 1px solid var(--line); }
+    .field-bank-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .field-bank-dialog[hidden] { display: none; }
 
     .output-hint {
       display: grid;
@@ -542,6 +571,7 @@
     <symbol id="icon-theme-system" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
     <symbol id="icon-theme-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></symbol>
     <symbol id="icon-theme-dark" viewBox="0 0 24 24"><path d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5 8.5 8.5 0 1 0 20.5 15.5Z"/></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 2.9-.2-.1a1.7 1.7 0 0 0-1.8-.2 1.7 1.7 0 0 0-1 1.5v.2h-3.4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.2l-.2.1L7 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H5.7v-3.4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L7 7.6l1.7-2.9.2.1a1.7 1.7 0 0 0 1.8.2 1.7 1.7 0 0 0 1-1.5v-.2h3.4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.2l.2-.1 1.7 2.9-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2V14h-.2a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
   </svg>
   <div class="app-shell">
     <aside class="sidebar">
@@ -664,6 +694,9 @@
                 <h2>Field Result Column Extractor</h2>
                 <p>Upload an Excel workbook containing a sheet named <strong>RESULT</strong>.</p>
               </div>
+              <button class="button button-secondary field-settings-toggle" id="field-settings-toggle" type="button" aria-label="Field Result settings" title="Settings" aria-expanded="false" aria-controls="field-bank-dialog">
+                <svg class="icon" aria-hidden="true"><use href="#icon-settings"></use></svg>
+              </button>
             </div>
             <form id="field-form">
               <div class="field">
@@ -679,11 +712,42 @@
                 </div>
               </div>
               <div class="actions">
-                <button class="button button-primary" type="submit"><svg class="icon"><use href="#icon-rotate"></use></svg>Process Field Result</button>
+                <button class="button button-primary" type="submit" disabled><svg class="icon"><use href="#icon-rotate"></use></svg>Process Field Result</button>
                 <button class="button button-secondary" id="field-clear" type="reset" disabled><svg class="icon"><use href="#icon-rotate"></use></svg>Clear File / Results</button>
               </div>
+              <div class="field-hint field-bank-summary" id="field-bank-summary" aria-live="polite">Please select in settings.</div>
               <div class="notice" id="field-notice" hidden role="status"></div>
             </form>
+            <dialog class="field-bank-dialog" id="field-bank-dialog" aria-labelledby="field-bank-dialog-title">
+              <div class="field-bank-dialog-header">
+              <div>
+                <h3 id="field-bank-dialog-title">Field Result settings</h3>
+                <p>PIF filters bank names containing “PIF” in column AG of the uploaded workbook. ALL CAMPAIGN includes every campaign.</p>
+              </div>
+              <button class="button button-secondary field-bank-dialog-close" id="field-bank-dialog-x" type="button" aria-label="Close bank settings">
+                <svg class="icon"><use href="#icon-close"></use></svg>
+              </button>
+              </div>
+              <div class="field-bank-dialog-body">
+              <div class="field-campaign-options" role="group" aria-label="Campaign filter">
+                <button class="button button-secondary" type="button" data-field-campaign="pif" aria-pressed="false">PIF</button>
+                <button class="button button-secondary" type="button" data-field-campaign="all" aria-pressed="false">ALL CAMPAIGN</button>
+              </div>
+              <label class="field-bank-filter-label" for="field-bank-name">Optional: process only one selected bank</label>
+              <div class="field-bank-filter-row">
+                <input id="field-bank-name" type="text" list="field-bank-options" maxlength="256" placeholder="Type the exact bank name from column AG">
+                <datalist id="field-bank-options"><option value="PIF"></option></datalist>
+              </div>
+              <p class="field-bank-filter-help">Bank names are not loaded from the workbook. Choose PIF or type the exact bank name from column AG to process only that bank.</p>
+              </div>
+              <div class="field-bank-dialog-footer">
+              <button class="button button-secondary" id="field-bank-clear-selection" type="button">Reset settings</button>
+              <div class="field-bank-dialog-actions">
+                <button class="button button-secondary" id="field-bank-cancel" type="button">Cancel</button>
+                <button class="button button-primary" id="field-bank-apply" type="button" disabled>Apply</button>
+              </div>
+              </div>
+            </dialog>
             <div id="field-output"></div>
           </div>
         </section>
@@ -724,6 +788,6 @@
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
-  <script src="app.js?v=23"></script>
+  <script src="app.js?v=41"></script>
 </body>
 </html>

@@ -499,19 +499,25 @@ async function copyToClipboard(text) {
 }
 
 async function processFieldResult() {
+  if (!selectedFieldFilters.campaign) {
+    throw new Error("Please select PIF or ALL CAMPAIGN in Field Result settings.");
+  }
   const file = document.getElementById("field-file").files[0];
   if (!file) throw new Error("Please select an Excel workbook.");
   if (!file.name.toLowerCase().endsWith(".xlsx")) throw new Error("Please select an .xlsx workbook.");
-  const isStaticHosting = location.protocol === "file:" ||
-    location.hostname.endsWith(".github.io");
-  if (isStaticHosting) return processFieldResultInBrowser(file);
+  const fieldFilters = selectedFieldFilters;
+  if (isFieldResultStaticHosting()) return processFieldResultInBrowser(file, fieldFilters);
 
   setNotice("field-notice", "Uploading workbook for memory-efficient processing…", "");
-  const response = await fetch("/api/field-result", {
+  const fieldResultUrl = new URL("/api/field-result", location.href);
+  fieldResultUrl.searchParams.set("campaign", fieldFilters.campaign);
+  fieldResultUrl.searchParams.set("bank", fieldFilters.bank);
+  const response = await fetch(fieldResultUrl, {
     method: "POST",
     body: file,
     headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "X-Field-Result-Banks": encodeURIComponent(JSON.stringify(fieldFilters))
     },
     cache: "no-store",
     credentials: "same-origin"
@@ -521,7 +527,7 @@ async function processFieldResult() {
     result = await response.json();
   } catch {
     if (response.status === 405) {
-      return processFieldResultInBrowser(file);
+      return processFieldResultInBrowser(file, fieldFilters);
     }
     if (response.status === 404) {
       throw new Error("The streaming Field Result server is unavailable. Restart the app with npm.cmd start; the Python static server cannot process large workbooks.");
@@ -530,6 +536,9 @@ async function processFieldResult() {
   }
   if (!response.ok) {
     throw new Error(result.error || `Field Result processing failed (HTTP ${response.status}).`);
+  }
+  if (result.campaign !== fieldFilters.campaign) {
+    throw new Error("The Field Result server used a different campaign setting. Update server.mjs and field_result_processor.py, then restart the server.");
   }
 
   const output = document.getElementById("field-output");
@@ -555,7 +564,37 @@ async function processFieldResult() {
     ["A", "B", "C", "D", "E", "F", "G", "H"],
     previewObjects
   );
-  return `${result.rows.toLocaleString()} row(s) extracted. Preview shows up to 100 rows.`;
+  return `${fieldFilters.campaign === "pif" ? "PIF only" : "ALL CAMPAIGN"} · ${result.rows.toLocaleString()} row(s) extracted. Preview shows up to 100 rows.`;
+}
+
+function isFieldResultStaticHosting() {
+  return location.protocol === "file:" || location.hostname.endsWith(".github.io");
+}
+
+let selectedFieldFilters = { campaign: "", bank: "" };
+let pendingFieldFilters = { ...selectedFieldFilters };
+
+function syncFieldFilterControls(filters) {
+  document.querySelectorAll("[data-field-campaign]").forEach((button) => {
+    const active = button.dataset.fieldCampaign === filters.campaign;
+    button.setAttribute("aria-pressed", String(active));
+    button.classList.toggle("button-primary", active);
+    button.classList.toggle("button-secondary", !active);
+  });
+  document.getElementById("field-bank-name").value = filters.bank;
+  document.getElementById("field-bank-apply").disabled = !filters.campaign;
+}
+
+function updateFieldBankSummary() {
+  const processButton = document.querySelector("#field-form button[type='submit']");
+  processButton.disabled = !selectedFieldFilters.campaign;
+  if (!selectedFieldFilters.campaign) {
+    document.getElementById("field-bank-summary").textContent = "Please select in settings.";
+    return;
+  }
+  const campaign = selectedFieldFilters.campaign === "pif" ? "PIF" : "ALL CAMPAIGN";
+  const bank = selectedFieldFilters.bank ? ` · Selected bank: ${selectedFieldFilters.bank}` : "";
+  document.getElementById("field-bank-summary").textContent = `Processing ${campaign}${bank}.`;
 }
 
 function downloadUrl(url, filename) {
@@ -567,9 +606,9 @@ function downloadUrl(url, filename) {
   link.remove();
 }
 
-async function processFieldResultInBrowser(file) {
+async function processFieldResultInBrowser(file, fieldFilters = {}) {
   const { outputArray, previewRows, totalRows, extraCsvBlob } = await new Promise((resolve, reject) => {
-    const fieldWorker = new Worker("field-result-worker.js?v=4");
+    const fieldWorker = new Worker("field-result-worker.js?v=11");
     fieldWorker.onmessage = ({ data }) => {
       if (data.type === "error") {
         fieldWorker.terminate();
@@ -585,6 +624,10 @@ async function processFieldResultInBrowser(file) {
         );
       } else if (data.type === "complete") {
         fieldWorker.terminate();
+        if (data.campaign !== fieldFilters.campaign) {
+          reject(new Error("The Field Result worker used a different campaign setting. Refresh the page and try again."));
+          return;
+        }
         resolve(data);
       }
     };
@@ -592,7 +635,7 @@ async function processFieldResultInBrowser(file) {
       fieldWorker.terminate();
       reject(new Error("Field Result background processing failed. The workbook may be too large for the available browser memory; try splitting it into smaller workbooks."));
     };
-    fieldWorker.postMessage({ file });
+    fieldWorker.postMessage({ file, fieldFilters });
   });
   const date = new Date();
   const dateStamp = `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}-${date.getFullYear()}`;
@@ -612,7 +655,7 @@ async function processFieldResultInBrowser(file) {
     ["A", "B", "C", "D", "E", "F", "G", "H"],
     previewObjects
   );
-  return `${totalRows.toLocaleString()} row(s) extracted. Preview shows up to 100 rows.`;
+  return `${fieldFilters.campaign === "pif" ? "PIF only" : "ALL CAMPAIGN"} · ${totalRows.toLocaleString()} row(s) extracted. Preview shows up to 100 rows.`;
 }
 
 function grayscaleImageData(imageData) {
@@ -849,7 +892,7 @@ function formatRemainingTime(milliseconds) {
   return seconds ? `${minutes} min ${seconds} sec` : `${minutes} min`;
 }
 
-async function runProcess(form, noticeId, processor, estimate) {
+async function runProcess(form, noticeId, processor, estimate, canRun = () => true) {
   const button = form.querySelector('button[type="submit"]');
   const originalContents = Array.from(button.childNodes, (node) => node.cloneNode(true));
   button.disabled = true;
@@ -880,7 +923,7 @@ async function runProcess(form, noticeId, processor, estimate) {
     setNotice(noticeId, error instanceof Error ? error.message : String(error), "error");
   } finally {
     window.clearInterval(estimateTimer);
-    button.disabled = false;
+    button.disabled = !canRun();
     button.replaceChildren(...originalContents);
   }
 }
@@ -893,9 +936,22 @@ const notificationStatus = document.getElementById("notification-status");
 const notificationCount = document.getElementById("notification-count");
 const notificationBadge = document.getElementById("notification-badge");
 const notificationExport = document.getElementById("notification-export");
+const baseDocumentTitle = document.title;
+const appFavicon = document.getElementById("app-favicon");
+const defaultFavicon = "assets/workspace-tools-icon.svg?v=4";
+const notificationFavicon = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A7132B"/><stop offset="1" stop-color="#E31837"/></linearGradient></defs><rect width="64" height="64" rx="19" fill="url(#background)"/><rect x="14" y="24" width="36" height="25" rx="6" fill="#FFF0F0"/><path d="M25 24v-4a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v4" fill="none" stroke="#FFF0F0" stroke-linecap="round" stroke-width="4"/><path d="M14 34h36M28 34v5h8v-5" fill="none" stroke="#A7132B" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/><circle cx="45" cy="17" r="6" fill="#A7132B"/><path d="M45 14.5v5M42.5 17h5" stroke="#fff" stroke-linecap="round" stroke-width="1.8"/></svg>'
+)}`;
 let hasLoadedNotificationCount = false;
 let toolTransitionTimer;
 let activeTool = "vrp";
+
+function updateDocumentRecordCount(count) {
+  document.title = count === null || count === 0
+    ? baseDocumentTitle
+    : `(${count.toLocaleString()}) ${baseDocumentTitle}`;
+  appFavicon.href = count !== null && count > 0 ? notificationFavicon : defaultFavicon;
+}
 
 function showNotificationStatus(message, state = "") {
   notificationStatus.textContent = message;
@@ -953,6 +1009,7 @@ async function refreshLarkNotifications() {
     notificationCount.textContent = formatRecordCount(result.count);
     notificationBadge.textContent = result.count > 999 ? "999+" : String(result.count);
     notificationBadge.hidden = result.count === 0;
+    updateDocumentRecordCount(result.count);
     vrpNotifications.setAttribute("aria-label", `Notifications, ${result.count} records`);
     hasLoadedNotificationCount = true;
     notificationExport.disabled = false;
@@ -965,6 +1022,7 @@ async function refreshLarkNotifications() {
     hasLoadedNotificationCount = false;
     notificationCount.textContent = "Unavailable";
     notificationExport.disabled = true;
+    updateDocumentRecordCount(null);
     vrpNotifications.setAttribute("aria-label", "Notifications");
     showNotificationStatus(error.message || "Could not check the Lark table.", "error");
   } finally {
@@ -1169,7 +1227,47 @@ document.getElementById("field-form").addEventListener("submit", (event) => {
       if (fieldResultTimings.length > 5) fieldResultTimings.shift();
     }
   } : undefined;
-  runProcess(event.currentTarget, "field-notice", processFieldResult, estimate);
+  runProcess(
+    event.currentTarget,
+    "field-notice",
+    processFieldResult,
+    estimate,
+    () => Boolean(selectedFieldFilters.campaign)
+  );
+});
+const fieldSettingsToggle = document.getElementById("field-settings-toggle");
+const fieldBankDialog = document.getElementById("field-bank-dialog");
+fieldSettingsToggle.addEventListener("click", () => {
+  pendingFieldFilters = { ...selectedFieldFilters };
+  syncFieldFilterControls(pendingFieldFilters);
+  fieldBankDialog.returnValue = "cancel";
+  fieldSettingsToggle.setAttribute("aria-expanded", "true");
+  fieldBankDialog.showModal();
+});
+document.querySelectorAll("[data-field-campaign]").forEach((button) => {
+  button.addEventListener("click", () => {
+    pendingFieldFilters.campaign = button.dataset.fieldCampaign;
+    pendingFieldFilters.bank = "";
+    syncFieldFilterControls(pendingFieldFilters);
+  });
+});
+document.getElementById("field-bank-name").addEventListener("input", (event) => {
+  pendingFieldFilters.bank = event.currentTarget.value.trim();
+});
+document.getElementById("field-bank-dialog-x").addEventListener("click", () => fieldBankDialog.close("cancel"));
+document.getElementById("field-bank-cancel").addEventListener("click", () => fieldBankDialog.close("cancel"));
+document.getElementById("field-bank-apply").addEventListener("click", () => fieldBankDialog.close("apply"));
+document.getElementById("field-bank-clear-selection").addEventListener("click", () => {
+  pendingFieldFilters = { campaign: "", bank: "" };
+  syncFieldFilterControls(pendingFieldFilters);
+});
+fieldBankDialog.addEventListener("close", () => {
+  fieldSettingsToggle.setAttribute("aria-expanded", "false");
+  if (fieldBankDialog.returnValue === "apply" && pendingFieldFilters.campaign) {
+    selectedFieldFilters = { ...pendingFieldFilters };
+    updateFieldBankSummary();
+  }
+  fieldSettingsToggle.focus();
 });
 document.getElementById("esign-form").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -1184,8 +1282,12 @@ document.getElementById("vrp-reset").addEventListener("click", () => {
 });
 document.getElementById("field-form").addEventListener("reset", () => {
   window.setTimeout(() => {
+    selectedFieldFilters = { campaign: "", bank: "" };
+    pendingFieldFilters = { ...selectedFieldFilters };
     document.getElementById("field-clear").disabled = true;
     document.getElementById("field-file-list").textContent = "";
+    syncFieldFilterControls(selectedFieldFilters);
+    updateFieldBankSummary();
     clearNotice("field-notice");
     document.getElementById("field-output").replaceChildren();
   }, 0);

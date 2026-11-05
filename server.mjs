@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import os from "node:os";
@@ -109,11 +109,13 @@ async function saveFieldResultUpload(request, targetPath) {
   await pipeline(request, limit, createWriteStream(targetPath, { flags: "wx" }));
 }
 
-function runFieldResultProcessor(inputPath, outputDir) {
+async function runFieldResultProcessor(inputPath, outputDir, bankFilters = []) {
   const python = process.env.PYTHON_EXECUTABLE || "python";
   const scriptPath = path.join(ROOT, "field_result_processor.py");
+  const filterPath = path.join(outputDir, "bank-filters.json");
+  await writeFile(filterPath, JSON.stringify(bankFilters), { flag: "wx" });
   return new Promise((resolve, reject) => {
-    const child = spawn(python, [scriptPath, inputPath, outputDir], {
+    const child = spawn(python, [scriptPath, inputPath, outputDir, filterPath], {
       cwd: ROOT,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"]
@@ -145,6 +147,46 @@ function runFieldResultProcessor(inputPath, outputDir) {
   });
 }
 
+function runFieldResultBankLister(inputPath) {
+  const python = process.env.PYTHON_EXECUTABLE || "python";
+  const scriptPath = path.join(ROOT, "field_result_processor.py");
+  return new Promise((resolve, reject) => {
+    const child = spawn(python, [scriptPath, "--list-banks", inputPath], {
+      cwd: ROOT,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout = `${stdout}${chunk}`.slice(-1024 * 1024);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr = `${stderr}${chunk}`.slice(-16 * 1024);
+    });
+    child.once("error", (error) => {
+      reject(new Error(`Could not start Python for Field Result bank lookup: ${error.message}`));
+    });
+    child.once("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `Field Result bank lookup exited with code ${code}.`));
+        return;
+      }
+      try {
+        const banks = JSON.parse(stdout.trim());
+        if (!Array.isArray(banks) || banks.some((bank) => typeof bank !== "string")) {
+          throw new Error("Field Result bank lookup returned invalid bank names.");
+        }
+        resolve(banks);
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error("Field Result bank lookup returned invalid data."));
+      }
+    });
+  });
+}
+
 async function cleanupExpiredFieldResultJobs(jobs) {
   const expiredBefore = Date.now() - FIELD_RESULT_JOB_TTL_MS;
   for (const [id, job] of jobs) {
@@ -155,7 +197,7 @@ async function cleanupExpiredFieldResultJobs(jobs) {
   }
 }
 
-async function processFieldResultUpload(request, response, jobs) {
+async function processFieldResultUpload(request, response, jobs, bankFilters = []) {
   const declaredLength = Number(request.headers["content-length"] || 0);
   if (declaredLength > MAX_FIELD_RESULT_UPLOAD_BYTES) {
     request.resume();
@@ -167,7 +209,7 @@ async function processFieldResultUpload(request, response, jobs) {
   const inputPath = path.join(directory, "input.xlsx");
   try {
     await saveFieldResultUpload(request, inputPath);
-    const result = await runFieldResultProcessor(inputPath, directory);
+    const result = await runFieldResultProcessor(inputPath, directory, bankFilters);
     await rm(inputPath, { force: true });
     const id = randomUUID();
     const job = {
@@ -185,6 +227,7 @@ async function processFieldResultUpload(request, response, jobs) {
     jobs.set(id, job);
     sendJson(response, 200, {
       id,
+      campaign: result.campaign,
       rows: result.rows,
       previewRows: result.previewRows,
       workbookName: result.workbookName
@@ -192,13 +235,40 @@ async function processFieldResultUpload(request, response, jobs) {
   } catch (error) {
     await rm(directory, { recursive: true, force: true });
     const status = error.statusCode || (
-      /RESULT|worksheet|workbook|zip file|not a zip/i.test(error.message) ? 400 : 500
+      /RESULT|worksheet|workbook|zip file|not a zip|bank/i.test(error.message) ? 400 : 500
     );
     sendJson(response, status, {
       error: status === 500
         ? `Field Result could not process this workbook: ${error.message}`
         : error.message
     });
+  }
+}
+
+async function listFieldResultBanksUpload(request, response) {
+  const declaredLength = Number(request.headers["content-length"] || 0);
+  if (declaredLength > MAX_FIELD_RESULT_UPLOAD_BYTES) {
+    request.resume();
+    sendJson(response, 413, { error: "The workbook is larger than the 512 MB upload limit." });
+    return;
+  }
+
+  const directory = await mkdtemp(path.join(os.tmpdir(), "workspace-field-banks-"));
+  const inputPath = path.join(directory, "input.xlsx");
+  try {
+    await saveFieldResultUpload(request, inputPath);
+    sendJson(response, 200, { banks: await runFieldResultBankLister(inputPath) });
+  } catch (error) {
+    const status = error.statusCode || (
+      /RESULT|worksheet|workbook|zip file|not a zip/i.test(error.message) ? 400 : 500
+    );
+    sendJson(response, status, {
+      error: status === 500
+        ? `Field Result bank lookup failed: ${error.message}`
+        : error.message
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 }
 
@@ -329,13 +399,49 @@ export function createAppServer(env) {
       }
 
       const url = new URL(request.url, "http://localhost");
+      if (url.pathname === "/api/field-result/banks") {
+        if (request.method !== "POST") {
+          sendJson(response, 405, { error: "Method not allowed." });
+          return;
+        }
+        await listFieldResultBanksUpload(request, response);
+        return;
+      }
       if (url.pathname === "/api/field-result") {
         if (request.method !== "POST") {
           sendJson(response, 405, { error: "Method not allowed." });
           return;
         }
         await cleanupExpiredFieldResultJobs(fieldResultJobs);
-        await processFieldResultUpload(request, response, fieldResultJobs);
+        const bankHeader = request.headers["x-field-result-banks"] || "%7B%22campaign%22%3A%22pif%22%2C%22bank%22%3A%22%22%7D";
+        let bankFilters;
+        try {
+          bankFilters = JSON.parse(decodeURIComponent(bankHeader));
+        } catch {
+          request.resume();
+          sendJson(response, 400, { error: "The bank selection is invalid." });
+          return;
+        }
+        if (url.searchParams.has("campaign")) {
+          bankFilters = {
+            campaign: url.searchParams.get("campaign"),
+            bank: url.searchParams.get("bank") || ""
+          };
+        }
+        const validLegacyFilters = Array.isArray(bankFilters) &&
+          bankFilters.every((bank) => typeof bank === "string" && bank.trim() && bank.length <= 256);
+        const validSelection = bankFilters &&
+          typeof bankFilters === "object" &&
+          !Array.isArray(bankFilters) &&
+          ["all", "pif"].includes(bankFilters.campaign) &&
+          typeof bankFilters.bank === "string" &&
+          bankFilters.bank.length <= 256;
+        if (!validLegacyFilters && !validSelection) {
+          request.resume();
+          sendJson(response, 400, { error: "The campaign or bank selection is invalid." });
+          return;
+        }
+        await processFieldResultUpload(request, response, fieldResultJobs, bankFilters);
         return;
       }
       const fieldResultDownload = url.pathname.match(/^\/api\/field-result\/([0-9a-f-]{36})\/(workbook|csv)$/i);

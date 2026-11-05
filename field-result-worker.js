@@ -27,12 +27,21 @@ function cellValue(sheet, row, column) {
   return cell.v ?? "";
 }
 
+function getBankNames(sheet, range) {
+  const banks = new Map();
+  for (let rowIndex = range.s.r + 1; rowIndex <= range.e.r; rowIndex += 1) {
+    const bank = String(cellValue(sheet, rowIndex, 32)).trim();
+    if (bank && !banks.has(bank.toLocaleLowerCase())) banks.set(bank.toLocaleLowerCase(), bank);
+  }
+  return [...banks.values()].sort((left, right) => left.localeCompare(right));
+}
+
 function csvEscape(value) {
   const text = value == null ? "" : String(value);
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-async function processWorkbook(file) {
+async function readResultSheet(file) {
   self.postMessage({ type: "phase", phase: "Reading workbook" });
   const fileData = await file.arrayBuffer();
   const workbook = XLSX.read(fileData, { type: "array", cellDates: true });
@@ -54,19 +63,48 @@ async function processWorkbook(file) {
   }
   if (!sheet["!ref"]) throw new Error("The RESULT sheet is empty or contains no readable cells.");
   const range = XLSX.utils.decode_range(sheet["!ref"]);
+  return { sheet, range };
+}
+
+async function processWorkbook(file, fieldFilters = {}) {
+  const { sheet, range } = await readResultSheet(file);
   const totalRows = range.e.r - range.s.r + 1;
-  const outputSheet = { "!ref": `A1:H${totalRows}` };
+  const outputSheet = {};
   const csvParts = ['\uFEFF"Ref Code","Field Name"\r\n'];
   const columnWidths = Array(8).fill(10);
   const previewRows = [];
+  const legacyBanks = Array.isArray(fieldFilters) ? fieldFilters : [];
+  const campaign = Array.isArray(fieldFilters)
+    ? legacyBanks.length ? "all" : "pif"
+    : fieldFilters.campaign === "all" ? "all" : "pif";
+  const selectedBank = typeof fieldFilters.bank === "string" ? fieldFilters.bank.trim().toLocaleLowerCase() : "";
+  const selectedBanks = new Set(legacyBanks.map((bank) => bank.trim().toLocaleLowerCase()));
   let csvLineCount = 0;
+  let outputRowCount = 0;
 
   self.postMessage({ type: "phase", phase: "Extracting columns", totalRows });
   for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
+    const isHeader = rowIndex === range.s.r;
+    const bank = String(cellValue(sheet, rowIndex, 32)).trim();
+    const normalizedBank = bank.toLocaleLowerCase();
+    const matchesCampaign = campaign !== "pif" || normalizedBank.includes("pif");
+    const matchesBank = selectedBank ? normalizedBank === selectedBank : !selectedBanks.size || selectedBanks.has(normalizedBank);
+    if (!isHeader && (!matchesCampaign || !matchesBank)) {
+      if ((rowIndex - range.s.r + 1) % 25000 === 0) {
+        self.postMessage({
+          type: "progress",
+          processedRows: rowIndex - range.s.r + 1,
+          totalRows
+        });
+      }
+      continue;
+    }
+
     const row = OUTPUT_COLUMNS.map((column) =>
       dateToUsString(formatExcelDate(cellValue(sheet, rowIndex, column)))
     );
-    const outputRowIndex = rowIndex - range.s.r;
+    const outputRowIndex = outputRowCount;
+    outputRowCount += 1;
     if (outputRowIndex < PREVIEW_ROW_LIMIT) previewRows.push(row);
 
     for (let columnIndex = 0; columnIndex < row.length; columnIndex += 1) {
@@ -84,7 +122,7 @@ async function processWorkbook(file) {
       };
     }
 
-    if (rowIndex > range.s.r) {
+    if (!isHeader) {
       csvParts.push([
         csvEscape(cellValue(sheet, rowIndex, 41)),
         csvEscape(cellValue(sheet, rowIndex, 26))
@@ -104,8 +142,12 @@ async function processWorkbook(file) {
       });
     }
   }
+  if ((selectedBanks.size || selectedBank || campaign === "pif") && outputRowCount === 1) {
+    throw new Error("No data rows were found for the selected campaign or bank in column AG.");
+  }
 
   self.postMessage({ type: "phase", phase: "Building the output workbook", totalRows });
+  outputSheet["!ref"] = `A1:H${outputRowCount}`;
   outputSheet["!cols"] = columnWidths.map((width) => ({ wch: width }));
   const outputBook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(outputBook, outputSheet, "RESULT");
@@ -128,16 +170,27 @@ async function processWorkbook(file) {
 
   self.postMessage({
     type: "complete",
+    campaign,
     outputArray,
     previewRows,
-    totalRows,
+    totalRows: outputRowCount,
     extraCsvBlob: new Blob(csvParts, { type: "text/csv;charset=utf-8" })
   }, [outputArray.buffer]);
 }
 
 self.onmessage = async (event) => {
   try {
-    await processWorkbook(event.data.file);
+    if (event.data.action === "list-banks") {
+      const { sheet, range } = await readResultSheet(event.data.file);
+      self.postMessage({ type: "banks", banks: getBankNames(sheet, range) });
+      return;
+    }
+    const fieldFilters = event.data.fieldFilters || (Array.isArray(event.data.bankFilters)
+      ? event.data.bankFilters.filter((bank) => typeof bank === "string")
+      : event.data.bankFilter
+        ? [event.data.bankFilter]
+        : []);
+    await processWorkbook(event.data.file, fieldFilters);
   } catch (error) {
     self.postMessage({
       type: "error",
