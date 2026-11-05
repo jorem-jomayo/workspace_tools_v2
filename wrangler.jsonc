@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "workspace-tools-lark-notifications",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-04",
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:8001,https://YOUR_GITHUB_OWNER.github.io"
+  }
+}
