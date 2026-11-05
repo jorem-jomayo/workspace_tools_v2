@@ -502,6 +502,10 @@ async function processFieldResult() {
   const file = document.getElementById("field-file").files[0];
   if (!file) throw new Error("Please select an Excel workbook.");
   if (!file.name.toLowerCase().endsWith(".xlsx")) throw new Error("Please select an .xlsx workbook.");
+  const isStaticHosting = location.protocol === "file:" ||
+    location.hostname.endsWith(".github.io");
+  if (isStaticHosting) return processFieldResultInBrowser(file);
+
   setNotice("field-notice", "Uploading workbook for memory-efficient processing…", "");
   const response = await fetch("/api/field-result", {
     method: "POST",
@@ -516,9 +520,7 @@ async function processFieldResult() {
   try {
     result = await response.json();
   } catch {
-    const isStaticHosting = location.protocol === "file:" ||
-      location.hostname.endsWith(".github.io");
-    if (response.status === 404 && isStaticHosting) {
+    if (response.status === 405) {
       return processFieldResultInBrowser(file);
     }
     if (response.status === 404) {
