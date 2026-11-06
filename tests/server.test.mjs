@@ -111,7 +111,7 @@ test("serves the app without an app-level sign-in when tunnel mode is private", 
     assert.equal(response.status, 200);
     const appHtml = await response.text();
     assert.match(appHtml, /Workspace Tools V2/);
-    assert.match(appHtml, /app\.js\?v=42/);
+    assert.match(appHtml, /app\.js\?v=44/);
     assert.match(appHtml, /id="field-bank-summary" aria-live="polite">Please select in settings\./);
     assert.match(appHtml, /<button class="button button-primary" type="submit" disabled><svg class="icon"><use href="#icon-rotate"><\/use><\/svg>Process Field Result<\/button>/);
     assert.match(appHtml, /data-field-campaign="pif" aria-pressed="false">PIF/);
@@ -123,6 +123,9 @@ test("serves the app without an app-level sign-in when tunnel mode is private", 
     assert.equal(appScript.headers.get("Cache-Control"), "no-store");
     assert.match(appScript.headers.get("Content-Type"), /^text\/javascript/);
     const appScriptText = await appScript.text();
+    assert.match(appScriptText, /SPECIAL_MC2_BANKS = new Set\(\["CBS HOUSING LOAN", "SBC HOME LOAN"\]\)/);
+    assert.match(appScriptText, /if \(SPECIAL_MC2_BANKS\.has\(sourceBank\)\) return false;/);
+    assert.match(appScriptText, /if \(SPECIAL_MC2_BANKS\.has\(sourceBank\)\) \{\s+setOutput\("visit_type", "REGULAR"\);/);
     assert.match(appScriptText, /BASILAN:\s*"MINDANAO"/);
     assert.match(appScriptText, /if \(version === "FCL"\) \{\s+setOutput\("endorsement_date", ""\);\s+const fclAmountDue = getOutput\("amount_due"\) \|\| amountDue\.get\(chCode\);\s+if \(fclAmountDue\) setOutput\("amount_due", formatGeneralNumber\(fclAmountDue\)\);/);
     assert.match(appScriptText, /new Worker\("field-result-worker\.js\?v=12"\)/);
