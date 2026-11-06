@@ -1065,7 +1065,6 @@ vrpNotifications.addEventListener("click", () => {
   const open = notificationPopover.hidden;
   notificationPopover.hidden = !open;
   vrpNotifications.setAttribute("aria-expanded", String(open));
-  if (open) refreshLarkNotifications();
 });
 
 document.getElementById("notification-close").addEventListener("click", closeNotificationPopover);
@@ -1083,7 +1082,7 @@ window.setInterval(() => {
   if (activeTool === "vrp" && document.visibilityState === "visible") {
     refreshLarkNotifications();
   }
-}, 5 * 60 * 1000);
+}, 60 * 1000);
 
 refreshLarkNotifications();
 
