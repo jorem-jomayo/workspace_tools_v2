@@ -111,7 +111,7 @@ test("serves the app without an app-level sign-in when tunnel mode is private", 
     assert.equal(response.status, 200);
     const appHtml = await response.text();
     assert.match(appHtml, /Workspace Tools V2/);
-    assert.match(appHtml, /app\.js\?v=41/);
+    assert.match(appHtml, /app\.js\?v=42/);
     assert.match(appHtml, /id="field-bank-summary" aria-live="polite">Please select in settings\./);
     assert.match(appHtml, /<button class="button button-primary" type="submit" disabled><svg class="icon"><use href="#icon-rotate"><\/use><\/svg>Process Field Result<\/button>/);
     assert.match(appHtml, /data-field-campaign="pif" aria-pressed="false">PIF/);
@@ -123,7 +123,9 @@ test("serves the app without an app-level sign-in when tunnel mode is private", 
     assert.equal(appScript.headers.get("Cache-Control"), "no-store");
     assert.match(appScript.headers.get("Content-Type"), /^text\/javascript/);
     const appScriptText = await appScript.text();
-    assert.match(appScriptText, /new Worker\("field-result-worker\.js\?v=11"\)/);
+    assert.match(appScriptText, /BASILAN:\s*"MINDANAO"/);
+    assert.match(appScriptText, /if \(version === "FCL"\) \{\s+setOutput\("endorsement_date", ""\);\s+const fclAmountDue = getOutput\("amount_due"\) \|\| amountDue\.get\(chCode\);\s+if \(fclAmountDue\) setOutput\("amount_due", formatGeneralNumber\(fclAmountDue\)\);/);
+    assert.match(appScriptText, /new Worker\("field-result-worker\.js\?v=12"\)/);
     assert.match(appScriptText, /Please select PIF or ALL CAMPAIGN in Field Result settings/);
     assert.match(appScriptText, /searchParams\.set\("campaign", fieldFilters\.campaign\)/);
     assert.match(appScriptText, /pendingFieldFilters\.campaign = button\.dataset\.fieldCampaign;\s+pendingFieldFilters\.bank = "";\s+syncFieldFilterControls\(pendingFieldFilters\);/);
@@ -303,7 +305,7 @@ test("processes multiple selected banks on the server", async () => {
   });
 });
 
-test("filters PIF campaign and an exact selected bank on the server", async () => {
+test("filters an exact selected bank on the server", async () => {
   const workbook = makeXlsxWorkbook(["PIF HOME LOAN", "PIF CARD", "OTHER BANK"]);
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/field-result`, {
@@ -311,12 +313,13 @@ test("filters PIF campaign and an exact selected bank on the server", async () =
       headers: {
         "Content-Length": String(workbook.length),
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "X-Field-Result-Banks": encodeURIComponent(JSON.stringify({ campaign: "pif", bank: "PIF CARD" }))
+        "X-Field-Result-Banks": encodeURIComponent(JSON.stringify({ campaign: "all", bank: "PIF CARD" }))
       },
       body: workbook
     });
     assert.equal(response.status, 200);
     const result = await response.json();
+    assert.equal(result.campaign, "all");
     assert.equal(result.rows, 2);
     assert.equal(result.previewRows[1][0], "REF-101");
     const csvResponse = await fetch(`${baseUrl}/api/field-result/${result.id}/csv`);
@@ -326,7 +329,7 @@ test("filters PIF campaign and an exact selected bank on the server", async () =
   });
 });
 
-test("PIF campaign selection excludes every non-PIF bank on the server", async () => {
+test("PIF campaign selection includes only PIF HOME LOAN on the server", async () => {
   const workbook = makeXlsxWorkbook(["PIF HOME LOAN", "PIF CARD", "OTHER BANK"]);
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/field-result`, {
@@ -341,13 +344,12 @@ test("PIF campaign selection excludes every non-PIF bank on the server", async (
     assert.equal(response.status, 200);
     const result = await response.json();
     assert.equal(result.campaign, "pif");
-    assert.equal(result.rows, 3);
-    assert.deepEqual(result.previewRows.slice(1).map((row) => row[0]), ["REF-100", "REF-101"]);
+    assert.equal(result.rows, 2);
+    assert.deepEqual(result.previewRows.slice(1).map((row) => row[0]), ["REF-100"]);
     const csvResponse = await fetch(`${baseUrl}/api/field-result/${result.id}/csv`);
     const csv = await csvResponse.text();
     assert.match(csv, /REF-100,Field User/);
-    assert.match(csv, /REF-101,Field 2/);
-    assert.doesNotMatch(csv, /REF-102/);
+    assert.doesNotMatch(csv, /REF-101|REF-102/);
   });
 });
 
