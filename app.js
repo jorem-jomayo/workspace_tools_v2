@@ -31,7 +31,7 @@ const AREA_MAPPING = {
   AKLAN: "VISAYAS", ANTIQUE: "VISAYAS", BOHOL: "VISAYAS", CAPIZ: "VISAYAS",
   CEBU: "VISAYAS", GUIMARAS: "VISAYAS", ILOILO: "VISAYAS", LEYTE: "VISAYAS",
   "NEGROS OCCIDENTAL": "VISAYAS", "NEGROS ORIENTAL": "VISAYAS",
-  "AGUSAN DEL SUR": "MINDANAO", BUKIDNON: "MINDANAO", COTABATO: "MINDANAO",
+  "AGUSAN DEL SUR": "MINDANAO", BASILAN: "MINDANAO", BUKIDNON: "MINDANAO", COTABATO: "MINDANAO",
   "DAVAO DE ORO": "MINDANAO", "DAVAO DEL NORTE": "MINDANAO", "DAVAO DEL SUR": "MINDANAO",
   "DAVAO ORIENTAL": "MINDANAO", "LANAO DEL NORTE": "MINDANAO", "LANAO DEL SUR": "MINDANAO",
   MAGUINDANAO: "MINDANAO", "MISAMIS OCCIDENTAL": "MINDANAO", "MISAMIS ORIENTAL": "MINDANAO",
@@ -376,10 +376,13 @@ async function processVrp() {
     else setOutput("type_of_account", normalizeAccountType(getOutput("type_of_account")));
     setOutput("autofield_date", formatDate(getOutput("autofield_date"), "MM/DD/YYYY"));
     setOutput("pullout_date", formatDate(getOutput("pullout_date"), "MM/DD/YYYY"));
-    setOutput("endorsement_date", formatDate(getOutput("endorsement_date"), "DD-MM-YYYY"));
     if (version === "FCL") {
+      setOutput("endorsement_date", "");
+      const fclAmountDue = getOutput("amount_due") || amountDue.get(chCode);
+      if (fclAmountDue) setOutput("amount_due", formatGeneralNumber(fclAmountDue));
       setOutput("visit_type", "OTS");
     } else {
+      setOutput("endorsement_date", formatDate(getOutput("endorsement_date"), "DD-MM-YYYY"));
       const currentVisitType = findSourceValueOrColumn(row, COLUMN_ALIASES.visit_type, 0);
       const normalizedCurrentType = normalizeVisitType(currentVisitType);
       if (normalizedCurrentType) {
@@ -608,7 +611,7 @@ function downloadUrl(url, filename) {
 
 async function processFieldResultInBrowser(file, fieldFilters = {}) {
   const { outputArray, previewRows, totalRows, extraCsvBlob } = await new Promise((resolve, reject) => {
-    const fieldWorker = new Worker("field-result-worker.js?v=11");
+    const fieldWorker = new Worker("field-result-worker.js?v=12");
     fieldWorker.onmessage = ({ data }) => {
       if (data.type === "error") {
         fieldWorker.terminate();
