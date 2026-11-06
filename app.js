@@ -18,6 +18,7 @@ const toolDetails = {
 const TEMPLATE_FILE = "demand_letter_template.csv";
 const CMS_FILE = "cmd_id.xlsx";
 const AMOUNTS_FILE = "amounts.csv";
+const SPECIAL_MC2_BANKS = new Set(["CBS HOUSING LOAN", "SBC HOME LOAN"]);
 const AREA_MAPPING = {
   ABRA: "NORTH LUZON", AURORA: "NORTH LUZON", BATAAN: "NORTH LUZON",
   BENGUET: "NORTH LUZON", BULACAN: "NORTH LUZON", CAGAYAN: "NORTH LUZON",
@@ -361,6 +362,7 @@ async function processVrp() {
       if (header) result[header] = value;
     };
     const chCode = getOutput("ch_code").toUpperCase();
+    const sourceBank = findSourceValue(row, COLUMN_ALIASES.bank).toUpperCase();
     if (!getOutput("account_no")) setOutput("account_no", "0");
     if (getOutput("address")) setOutput("address", cleanAddress(getOutput("address")));
     setOutput("outstanding_balance", formatGeneralNumber(getOutput("outstanding_balance") || amountOb.get(chCode) || "0"));
@@ -381,6 +383,8 @@ async function processVrp() {
       const fclAmountDue = getOutput("amount_due") || amountDue.get(chCode);
       if (fclAmountDue) setOutput("amount_due", formatGeneralNumber(fclAmountDue));
       setOutput("visit_type", "OTS");
+    } else if (SPECIAL_MC2_BANKS.has(sourceBank)) {
+      setOutput("visit_type", "REGULAR");
     } else {
       setOutput("endorsement_date", formatDate(getOutput("endorsement_date"), "DD-MM-YYYY"));
       const currentVisitType = findSourceValueOrColumn(row, COLUMN_ALIASES.visit_type, 0);
@@ -411,7 +415,9 @@ async function processVrp() {
   if (version === "MC2") {
     const cmsHeader = templateHeaders.find((header) => normalizeHeader(header) === "CMSID");
     if (!cmsHeader) throw new Error(`${TEMPLATE_FILE} is missing the cms_id output column.`);
-    const missingCmsRows = outputRows.filter((row) => {
+    const missingCmsRows = outputRows.filter((row, index) => {
+      const sourceBank = findSourceValue(filtered[index].row, COLUMN_ALIASES.bank).toUpperCase();
+      if (SPECIAL_MC2_BANKS.has(sourceBank)) return false;
       const cmsId = String(row[cmsHeader] ?? "").trim();
       return !cmsId || ["NAN", "NONE", "NULL"].includes(cmsId.toUpperCase());
     });
