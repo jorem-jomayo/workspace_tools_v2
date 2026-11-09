@@ -111,8 +111,11 @@ test("serves the app without an app-level sign-in when tunnel mode is private", 
     assert.equal(response.status, 200);
     const appHtml = await response.text();
     assert.match(appHtml, /Workspace Tools V2/);
-    assert.match(appHtml, /app\.js\?v=45/);
+    assert.match(appHtml, /app\.js\?v=46/);
     assert.match(appHtml, /id="field-bank-summary" aria-live="polite">Please select in settings\./);
+    assert.match(appHtml, /<a class="button button-secondary button-green-link" href="https:\/\/openci\.spmadrid\.com\/dl-admin\/endo-uploader" target="_blank" rel="noopener noreferrer">Endo Uploader<\/a>/);
+    assert.match(appHtml, /<a class="button button-secondary button-purple-link" href="https:\/\/spmadridlaw\.sg\.larksuite\.com\/wiki\/L4H9w0EEyijUZik8ECpl1qLrgXe\?table=tblhfTLeDIZUaUAc&amp;view=vewudh9JI8" target="_blank" rel="noopener noreferrer">VRP Table<\/a>/);
+    assert.equal((appHtml.match(/>VRP Table<\/a>/g) || []).length, 1);
     assert.match(appHtml, /<button class="button button-primary" type="submit" disabled><svg class="icon"><use href="#icon-rotate"><\/use><\/svg>Process Field Result<\/button>/);
     assert.match(appHtml, /data-field-campaign="pif" aria-pressed="false">PIF/);
     assert.match(appHtml, /data-field-campaign="all" aria-pressed="false">ALL CAMPAIGN/);
@@ -124,7 +127,8 @@ test("serves the app without an app-level sign-in when tunnel mode is private", 
     assert.match(appScript.headers.get("Content-Type"), /^text\/javascript/);
     const appScriptText = await appScript.text();
     assert.match(appScriptText, /vrpNotifications\.addEventListener\("click", \(\) => \{\s+const open = notificationPopover\.hidden;\s+notificationPopover\.hidden = !open;\s+vrpNotifications\.setAttribute\("aria-expanded", String\(open\)\);\s+\}\);/);
-    assert.match(appScriptText, /window\.setInterval\(\(\) => \{\s+if \(activeTool === "vrp" && document\.visibilityState === "visible"\) \{\s+refreshLarkNotifications\(\);\s+\}\s+\}, 60 \* 1000\);/);
+    assert.match(appScriptText, /window\.setInterval\(\(\) => \{\s+refreshLarkNotifications\(\);\s+\}, 30 \* 1000\);/);
+    assert.match(appScriptText, /async function refreshLarkNotifications\(\) \{\s+if \(notificationCheckInProgress\) return;\s+notificationCheckInProgress = true;/);
     assert.match(appScriptText, /SPECIAL_MC2_BANKS = new Set\(\["CBS HOUSING LOAN", "SBC HOME LOAN"\]\)/);
     assert.match(appScriptText, /if \(SPECIAL_MC2_BANKS\.has\(sourceBank\)\) return false;/);
     assert.match(appScriptText, /if \(SPECIAL_MC2_BANKS\.has\(sourceBank\)\) \{\s+setOutput\("visit_type", "REGULAR"\);/);
