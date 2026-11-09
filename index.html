@@ -337,6 +337,10 @@
     .button-primary:disabled { cursor: wait; opacity: .72; transform: none; }
     .button-secondary { border-color: rgb(211 220 246 / 90%); color: #4c587e; background: rgb(255 255 255 / 68%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 90%); }
     .button-secondary:hover { border-color: #c4d2fa; color: var(--brand); background: rgb(255 255 255 / 90%); }
+    .button-green-link { color: #16834a; text-decoration: none; }
+    .button-green-link:hover { border-color: #9bd7b5; color: #116b3b; background: #f0fff6; }
+    .button-purple-link { color: #7041b8; text-decoration: none; }
+    .button-purple-link:hover { border-color: #c7afea; color: #56308f; background: #faf6ff; }
     .button:disabled { cursor: not-allowed; opacity: .58; transform: none; }
     .field-action { margin-top: 9px; }
     .field-action-status { display: inline-block; margin: 9px 0 0 8px; font-size: 10px; line-height: 1.5; vertical-align: middle; }
@@ -478,6 +482,10 @@
       box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
     }
     :root[data-theme="dark"] .button-secondary:hover { border-color: #536783; color: #fff; background: #29374d; }
+    :root[data-theme="dark"] .button-green-link { color: #7ee2a6; }
+    :root[data-theme="dark"] .button-green-link:hover { border-color: #397a55; color: #a4f0c0; background: #1c3428; }
+    :root[data-theme="dark"] .button-purple-link { color: #c6a5ff; }
+    :root[data-theme="dark"] .button-purple-link:hover { border-color: #7354a1; color: #dfcaff; background: #30243f; }
     :root[data-theme="dark"] .output-card,
     :root[data-theme="dark"] .table-wrap {
       border-color: rgb(148 163 184 / 19%);
@@ -679,6 +687,8 @@
               <div class="actions">
                 <button class="button button-primary" type="submit"><svg class="icon"><use href="#icon-sparkles"></use></svg>Process and Map Data</button>
                 <button class="button button-secondary" id="vrp-reset" type="reset"><svg class="icon"><use href="#icon-rotate"></use></svg>Reset / Clear All</button>
+                <a class="button button-secondary button-green-link" href="https://openci.spmadrid.com/dl-admin/endo-uploader" target="_blank" rel="noopener noreferrer">Endo Uploader</a>
+                <a class="button button-secondary button-purple-link" href="https://spmadridlaw.sg.larksuite.com/wiki/L4H9w0EEyijUZik8ECpl1qLrgXe?table=tblhfTLeDIZUaUAc&amp;view=vewudh9JI8" target="_blank" rel="noopener noreferrer">VRP Table</a>
               </div>
               <div class="notice" id="vrp-notice" hidden role="status"></div>
             </form>
@@ -788,6 +798,6 @@
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
-  <script src="app.js?v=45"></script>
+  <script src="app.js?v=46"></script>
 </body>
 </html>
